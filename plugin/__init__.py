@@ -8,5 +8,7 @@ Usage:
     Access via Tools > KiCad Collab > Generate Snapshot
 """
 
+__all__: list[str] = []  # No public exports yet - plugin entry points added in future stories
+
 __version__ = "0.1.0"
 __author__ = "KiCad Collab Contributors"

@@ -41,7 +41,7 @@ Hardware engineers using KiCad lack modern collaboration tools for design review
 ```bash
 # Option 1: KiCad Plugin Manager (coming soon)
 # Option 2: Manual installation
-git clone https://github.com/YOUR_USERNAME/kicad-collab.git
+git clone <repository-url>
 # Copy plugin/ folder to your KiCad plugins directory
 ```
 
@@ -98,7 +98,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) fo
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/kicad-collab.git
+git clone <repository-url>
 cd kicad-collab
 
 # Viewer development
