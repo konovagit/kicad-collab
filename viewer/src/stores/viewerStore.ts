@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import type { Result } from '@/types';
+
 interface ViewerState {
   // Initialization
   isInitialized: boolean;
@@ -10,8 +12,8 @@ interface ViewerState {
   isLoadingSvg: boolean;
   loadError: string | null;
 
-  // SVG actions
-  loadSnapshot: () => Promise<void>;
+  // SVG actions - returns Result type per architecture pattern
+  loadSnapshot: () => Promise<Result<string, Error>>;
   clearError: () => void;
 }
 
@@ -25,10 +27,12 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   isLoadingSvg: false,
   loadError: null,
 
-  // SVG actions
-  loadSnapshot: async () => {
+  // SVG actions - returns Result type per architecture pattern
+  loadSnapshot: async (): Promise<Result<string, Error>> => {
     // Prevent duplicate loads
-    if (get().isLoadingSvg) return;
+    if (get().isLoadingSvg) {
+      return { ok: false, error: new Error('Load already in progress') };
+    }
 
     set({ isLoadingSvg: true, loadError: null });
 
@@ -36,12 +40,13 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       const response = await fetch('/fixtures/sample-schematic.svg');
 
       if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`);
         set({
           isLoadingSvg: false,
           loadError: `Failed to load schematic: HTTP ${response.status}`,
           svg: null,
         });
-        return;
+        return { ok: false, error };
       }
 
       const svgContent = await response.text();
@@ -51,13 +56,15 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
         loadError: null,
         isInitialized: true,
       });
+      return { ok: true, data: svgContent };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorObj = error instanceof Error ? error : new Error('Unknown error occurred');
       set({
         isLoadingSvg: false,
-        loadError: `Failed to load schematic: ${errorMessage}`,
+        loadError: `Failed to load schematic: ${errorObj.message}`,
         svg: null,
       });
+      return { ok: false, error: errorObj };
     }
   },
 
