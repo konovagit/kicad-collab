@@ -33,5 +33,17 @@
     "footprint": "LED_SMD:LED_0805",
     "posX": 560,
     "posY": 120
+  },
+  {
+    "ref": "PWR1",
+    "value": "+3.3V",
+    "posX": 700,
+    "posY": 80
+  },
+  {
+    "ref": "GND1",
+    "value": "GND",
+    "posX": 700,
+    "posY": 520
   }
 ]

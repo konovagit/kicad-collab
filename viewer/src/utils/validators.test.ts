@@ -18,6 +18,7 @@ import {
 // Import fixture data
 import manifestFixture from '@/fixtures/manifest.json';
 import componentsFixture from '@/fixtures/components.json';
+import commentsFixture from '@/fixtures/comments.json';
 
 // ============================================================================
 // Manifest Validation Tests
@@ -148,9 +149,11 @@ describe('validateComponents', () => {
 
     expect(result.ok).toBe(true);
     if (isOk(result)) {
-      expect(result.data).toHaveLength(5);
+      expect(result.data).toHaveLength(7);
       expect(result.data[0].ref).toBe('R1');
       expect(result.data[3].ref).toBe('U1');
+      expect(result.data[5].ref).toBe('PWR1');
+      expect(result.data[6].ref).toBe('GND1');
     }
   });
 
@@ -237,6 +240,19 @@ describe('validateComponents', () => {
 // ============================================================================
 
 describe('validateComments', () => {
+  it('should validate fixture comments.json successfully', () => {
+    const result = validateComments(commentsFixture);
+
+    expect(result.ok).toBe(true);
+    if (isOk(result)) {
+      expect(result.data).toHaveLength(3);
+      expect(result.data[0].author).toBe('Reviewer');
+      expect(result.data[0].componentRef).toBe('C1');
+      expect(result.data[1].parentId).toBe('550e8400-e29b-41d4-a716-446655440001');
+      expect(result.data[2].status).toBe('resolved');
+    }
+  });
+
   it('should validate a complete valid comment', () => {
     const comments = [
       {

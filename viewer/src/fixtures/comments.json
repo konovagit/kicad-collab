@@ -1,0 +1,26 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "author": "Reviewer",
+    "content": "Consider using a higher capacitance value for better filtering.",
+    "createdAt": "2026-01-06T10:30:00Z",
+    "componentRef": "C1",
+    "status": "open"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "author": "Designer",
+    "content": "Good point, will update to 1uF.",
+    "createdAt": "2026-01-06T11:00:00Z",
+    "componentRef": "C1",
+    "status": "open",
+    "parentId": "550e8400-e29b-41d4-a716-446655440001"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "author": "Reviewer",
+    "content": "Overall schematic looks good. Ready for layout.",
+    "createdAt": "2026-01-06T12:00:00Z",
+    "status": "resolved"
+  }
+]
