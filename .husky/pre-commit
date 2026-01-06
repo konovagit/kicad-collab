@@ -1,2 +1,1 @@
-#!/bin/sh
-cd "$(dirname "$0")/../viewer" && npx --no lint-staged
+cd viewer && node_modules/.bin/lint-staged
