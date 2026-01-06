@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://kicad-collab.github.io/schema/comments.schema.json",
+  "title": "KiCad Collab Comments",
+  "description": "Array of review comments for a KiCad schematic",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "author", "content", "createdAt", "status"],
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Unique comment ID (UUID format recommended)"
+      },
+      "author": {
+        "type": "string",
+        "description": "Name of the comment author"
+      },
+      "content": {
+        "type": "string",
+        "description": "Comment text content"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time",
+        "description": "ISO 8601 timestamp when comment was created"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time",
+        "description": "ISO 8601 timestamp when comment was last updated"
+      },
+      "componentRef": {
+        "type": "string",
+        "description": "Reference of anchored component (null/omitted for general comments)"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["open", "resolved"],
+        "description": "Comment status"
+      },
+      "parentId": {
+        "type": "string",
+        "description": "Parent comment ID for threaded replies"
+      }
+    },
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://kicad-collab.github.io/schema/components.schema.json",
+  "title": "KiCad Collab Components",
+  "description": "Array of component metadata extracted from KiCad schematic",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["ref"],
+    "properties": {
+      "ref": {
+        "type": "string",
+        "description": "Component reference designator (e.g., 'C12', 'R1', 'U1')"
+      },
+      "value": {
+        "type": "string",
+        "description": "Component value (e.g., '100uF', '10k', 'ESP32-WROOM')"
+      },
+      "footprint": {
+        "type": "string",
+        "description": "Footprint name (e.g., 'Capacitor_SMD:C_0805')"
+      },
+      "posX": {
+        "type": "number",
+        "description": "X position in schematic units"
+      },
+      "posY": {
+        "type": "number",
+        "description": "Y position in schematic units"
+      }
+    },
+    "additionalProperties": false
+  }
+}

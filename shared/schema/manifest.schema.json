@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://kicad-collab.github.io/schema/manifest.schema.json",
+  "title": "KiCad Collab Manifest",
+  "description": "Manifest file for KiCad Collab snapshot containing version and metadata",
+  "type": "object",
+  "required": ["formatVersion", "generatedAt", "projectName"],
+  "properties": {
+    "formatVersion": {
+      "type": "string",
+      "description": "Schema version for migrations (e.g., '1.0')",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when snapshot was generated"
+    },
+    "kicadVersion": {
+      "type": "string",
+      "description": "KiCad version that generated the snapshot"
+    },
+    "projectName": {
+      "type": "string",
+      "description": "Name of the KiCad project"
+    },
+    "reviewStatus": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "completed"],
+      "default": "pending",
+      "description": "Current review status"
+    },
+    "reviewStartedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when review was started"
+    },
+    "reviewCompletedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when review was completed"
+    }
+  },
+  "additionalProperties": false
+}

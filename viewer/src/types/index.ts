@@ -1,4 +1,16 @@
-// Type re-exports for the viewer application
-// Add type exports here as they are created in future stories
+/**
+ * Type re-exports for the viewer application
+ */
 
-export {};
+// Re-export all schema types
+export type {
+  Manifest,
+  Component,
+  Comment,
+  ReviewStatus,
+  CommentStatus,
+  Result,
+  Snapshot,
+  NewComment,
+  NewReply,
+} from './schema';
