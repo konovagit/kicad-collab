@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PAN, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useViewerStore } from './viewerStore';
+import type { Component } from '@/types';
 
 // Sample SVG content for testing
 const mockSvgContent = '<svg><rect/></svg>';
+
+// Sample components for testing
+const mockComponents: Component[] = [
+  { ref: 'R1', value: '10k', footprint: 'Resistor_SMD:R_0805', posX: 130, posY: 110 },
+  { ref: 'C1', value: '100nF', footprint: 'Capacitor_SMD:C_0805', posX: 255, posY: 110 },
+];
 
 describe('viewerStore', () => {
   beforeEach(() => {
@@ -15,6 +22,11 @@ describe('viewerStore', () => {
       loadError: null,
       zoom: DEFAULT_ZOOM,
       pan: DEFAULT_PAN,
+      // Story 2.2 state
+      components: [],
+      componentIndex: new Map(),
+      isLoadingComponents: false,
+      loadComponentsError: null,
     });
     vi.restoreAllMocks();
   });
@@ -252,6 +264,168 @@ describe('viewerStore', () => {
       // Other state preserved
       expect(state.svg).toBe(mockSvgContent);
       expect(state.isInitialized).toBe(true);
+    });
+  });
+
+  describe('component state (Story 2.2)', () => {
+    it('initializes with empty components array', () => {
+      const state = useViewerStore.getState();
+      expect(state.components).toEqual([]);
+    });
+
+    it('initializes with empty componentIndex', () => {
+      const state = useViewerStore.getState();
+      expect(state.componentIndex.size).toBe(0);
+    });
+
+    it('initializes isLoadingComponents as false', () => {
+      const state = useViewerStore.getState();
+      expect(state.isLoadingComponents).toBe(false);
+    });
+
+    it('initializes loadComponentsError as null', () => {
+      const state = useViewerStore.getState();
+      expect(state.loadComponentsError).toBeNull();
+    });
+  });
+
+  describe('loadComponents (Story 2.2)', () => {
+    it('returns Result with ok:true and components on success', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockComponents),
+      } as Response);
+
+      const { loadComponents } = useViewerStore.getState();
+      const result = await loadComponents();
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(2);
+        expect(result.data[0].ref).toBe('R1');
+      }
+    });
+
+    it('returns Result with ok:false on HTTP error', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 404,
+      } as Response);
+
+      const { loadComponents } = useViewerStore.getState();
+      const result = await loadComponents();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain('404');
+      }
+    });
+
+    it('prevents duplicate loads', async () => {
+      useViewerStore.setState({ isLoadingComponents: true });
+
+      const { loadComponents } = useViewerStore.getState();
+      const result = await loadComponents();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Load already in progress');
+      }
+    });
+
+    it('updates store state on successful load', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockComponents),
+      } as Response);
+
+      const { loadComponents } = useViewerStore.getState();
+      await loadComponents();
+
+      const state = useViewerStore.getState();
+      expect(state.components).toHaveLength(2);
+      expect(state.isLoadingComponents).toBe(false);
+      expect(state.loadComponentsError).toBeNull();
+    });
+
+    it('updates store state on failed load', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 500,
+      } as Response);
+
+      const { loadComponents } = useViewerStore.getState();
+      await loadComponents();
+
+      const state = useViewerStore.getState();
+      expect(state.components).toEqual([]);
+      expect(state.isLoadingComponents).toBe(false);
+      expect(state.loadComponentsError).toContain('500');
+    });
+  });
+
+  describe('setComponentIndex (Story 2.2)', () => {
+    it('sets the component index', () => {
+      const index = new Map<string, Component>([
+        ['R1', mockComponents[0]],
+        ['C1', mockComponents[1]],
+      ]);
+
+      const { setComponentIndex } = useViewerStore.getState();
+      setComponentIndex(index);
+
+      const state = useViewerStore.getState();
+      expect(state.componentIndex.size).toBe(2);
+      expect(state.componentIndex.get('R1')?.value).toBe('10k');
+    });
+
+    it('replaces existing index', () => {
+      // Set initial index
+      const index1 = new Map<string, Component>([['R1', mockComponents[0]]]);
+      useViewerStore.getState().setComponentIndex(index1);
+
+      // Replace with new index
+      const index2 = new Map<string, Component>([['C1', mockComponents[1]]]);
+      useViewerStore.getState().setComponentIndex(index2);
+
+      const state = useViewerStore.getState();
+      expect(state.componentIndex.size).toBe(1);
+      expect(state.componentIndex.has('R1')).toBe(false);
+      expect(state.componentIndex.has('C1')).toBe(true);
+    });
+  });
+
+  describe('getComponent (Story 2.2)', () => {
+    it('returns component by ref', () => {
+      const index = new Map<string, Component>([
+        ['R1', mockComponents[0]],
+        ['C1', mockComponents[1]],
+      ]);
+      useViewerStore.getState().setComponentIndex(index);
+
+      const { getComponent } = useViewerStore.getState();
+      const component = getComponent('R1');
+
+      expect(component).toBeDefined();
+      expect(component?.ref).toBe('R1');
+      expect(component?.value).toBe('10k');
+    });
+
+    it('returns undefined for non-existent ref', () => {
+      const index = new Map<string, Component>([['R1', mockComponents[0]]]);
+      useViewerStore.getState().setComponentIndex(index);
+
+      const { getComponent } = useViewerStore.getState();
+      const component = getComponent('NONEXISTENT');
+
+      expect(component).toBeUndefined();
+    });
+
+    it('returns undefined when index is empty', () => {
+      const { getComponent } = useViewerStore.getState();
+      const component = getComponent('R1');
+
+      expect(component).toBeUndefined();
     });
   });
 });

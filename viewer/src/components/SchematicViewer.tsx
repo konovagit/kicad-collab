@@ -1,3 +1,4 @@
+import { useComponentMapping } from '@/hooks/useComponentMapping';
 import { usePanZoom } from '@/hooks/usePanZoom';
 import { useSchematic } from '@/hooks/useSchematic';
 
@@ -10,6 +11,8 @@ import { useSchematic } from '@/hooks/useSchematic';
  * with component elements via data-ref attributes.
  *
  * Uses CSS transform on wrapper div (not SVG viewBox) for GPU-accelerated rendering.
+ *
+ * Story 2.2: Integrates component mapping for SVG element to component data linking.
  */
 export function SchematicViewer() {
   const { svg, isLoadingSvg, loadError, reload } = useSchematic();
@@ -24,6 +27,10 @@ export function SchematicViewer() {
     handleMouseLeave,
     resetView,
   } = usePanZoom();
+
+  // Story 2.2: Component mapping - loads components.json and builds index
+  // The hook handles loading after SVG is available and logs warnings in dev mode
+  useComponentMapping();
 
   // Loading state
   if (isLoadingSvg) {

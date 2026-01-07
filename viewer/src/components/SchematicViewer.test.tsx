@@ -469,4 +469,139 @@ describe('SchematicViewer', () => {
       expect(screen.getByTestId('zoom-indicator').textContent).toMatch(/10%/);
     });
   });
+
+  describe('Component Mapping Integration (Story 2.2)', () => {
+    const mockComponents = [
+      { ref: 'R1', value: '10k', footprint: 'Resistor_SMD:R_0805', posX: 130, posY: 110 },
+      { ref: 'C1', value: '100nF', footprint: 'Capacitor_SMD:C_0805', posX: 255, posY: 110 },
+    ];
+
+    const mockSvgWithComponents = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+        <g data-ref="R1" data-value="10k"><rect/></g>
+        <g data-ref="C1" data-value="100nF"><rect/></g>
+      </svg>
+    `;
+
+    beforeEach(() => {
+      // Reset component state in addition to base state
+      useViewerStore.setState({
+        svg: null,
+        isLoadingSvg: false,
+        loadError: null,
+        isInitialized: false,
+        zoom: DEFAULT_ZOOM,
+        pan: DEFAULT_PAN,
+        components: [],
+        componentIndex: new Map(),
+        isLoadingComponents: false,
+        loadComponentsError: null,
+      });
+    });
+
+    it('loads components.json after SVG loads', async () => {
+      // Mock SVG fetch first, then components fetch
+      const fetchMock = vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if (String(url).includes('sample-schematic.svg')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgWithComponents),
+          } as Response);
+        }
+        if (String(url).includes('components.json')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockComponents),
+          } as Response);
+        }
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      });
+
+      render(<SchematicViewer />);
+
+      // Wait for SVG to load first
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      // Wait for components to be loaded
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith('/fixtures/components.json');
+      });
+
+      // Verify components are loaded into store
+      await waitFor(() => {
+        const state = useViewerStore.getState();
+        expect(state.components).toHaveLength(2);
+      });
+    });
+
+    it('builds component index after components and SVG are available', async () => {
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if (String(url).includes('sample-schematic.svg')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgWithComponents),
+          } as Response);
+        }
+        if (String(url).includes('components.json')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockComponents),
+          } as Response);
+        }
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      });
+
+      render(<SchematicViewer />);
+
+      // Wait for component index to be populated
+      await waitFor(
+        () => {
+          const state = useViewerStore.getState();
+          expect(state.componentIndex.size).toBe(2);
+        },
+        { timeout: 2000 }
+      );
+
+      // Verify getComponent works
+      const state = useViewerStore.getState();
+      expect(state.getComponent('R1')?.value).toBe('10k');
+      expect(state.getComponent('C1')?.value).toBe('100nF');
+    });
+
+    it('handles components.json load failure gracefully', async () => {
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if (String(url).includes('sample-schematic.svg')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgWithComponents),
+          } as Response);
+        }
+        if (String(url).includes('components.json')) {
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+          } as Response);
+        }
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      });
+
+      render(<SchematicViewer />);
+
+      // Wait for SVG to load - component should still render
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      // Wait for components load attempt
+      await waitFor(() => {
+        const state = useViewerStore.getState();
+        expect(state.loadComponentsError).toContain('404');
+      });
+
+      // SVG should still be displayed (graceful degradation)
+      expect(screen.getByTestId('schematic-container').querySelector('svg')).toBeInTheDocument();
+    });
+  });
 });

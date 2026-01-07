@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
-import type { Result } from '@/types';
+import type { Component, Result } from '@/types';
+import { loadComponents as loadComponentsFromFile } from '@/utils/componentLoader';
 
 // Pan/Zoom constants (Story 2.1)
 export const MIN_ZOOM = 0.1; // 10%
@@ -30,6 +31,17 @@ interface ViewerState {
   setZoom: (zoom: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
   resetView: () => void;
+
+  // Component state (Story 2.2)
+  components: Component[];
+  componentIndex: Map<string, Component>;
+  isLoadingComponents: boolean;
+  loadComponentsError: string | null;
+
+  // Component actions (Story 2.2)
+  loadComponents: () => Promise<Result<Component[], Error>>;
+  setComponentIndex: (index: Map<string, Component>) => void;
+  getComponent: (ref: string) => Component | undefined;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -102,5 +114,46 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
   resetView: () => {
     set({ zoom: DEFAULT_ZOOM, pan: DEFAULT_PAN });
+  },
+
+  // Component state (Story 2.2)
+  components: [],
+  componentIndex: new Map<string, Component>(),
+  isLoadingComponents: false,
+  loadComponentsError: null,
+
+  // Component actions (Story 2.2)
+  loadComponents: async (): Promise<Result<Component[], Error>> => {
+    // Prevent duplicate loads
+    if (get().isLoadingComponents) {
+      return { ok: false, error: new Error('Load already in progress') };
+    }
+
+    set({ isLoadingComponents: true, loadComponentsError: null });
+
+    const result = await loadComponentsFromFile();
+
+    if (result.ok) {
+      set({
+        components: result.data,
+        isLoadingComponents: false,
+        loadComponentsError: null,
+      });
+    } else {
+      set({
+        isLoadingComponents: false,
+        loadComponentsError: result.error.message,
+      });
+    }
+
+    return result;
+  },
+
+  setComponentIndex: (index: Map<string, Component>) => {
+    set({ componentIndex: index });
+  },
+
+  getComponent: (ref: string): Component | undefined => {
+    return get().componentIndex.get(ref);
   },
 }));
