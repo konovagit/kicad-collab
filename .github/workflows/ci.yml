@@ -13,12 +13,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'kicad-collab/viewer/package-lock.json'
+          cache-dependency-path: 'viewer/package-lock.json'
       - name: Install dependencies
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm ci
       - name: Run ESLint
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm run lint
 
   ruff:
@@ -31,10 +31,10 @@ jobs:
       - name: Install Ruff
         run: pip install ruff
       - name: Run Ruff (lint check)
-        working-directory: kicad-collab/plugin
+        working-directory: plugin
         run: ruff check . || exit 0
       - name: Run Ruff (format check)
-        working-directory: kicad-collab/plugin
+        working-directory: plugin
         run: ruff format --check . || exit 0
 
   test:
@@ -46,12 +46,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'kicad-collab/viewer/package-lock.json'
+          cache-dependency-path: 'viewer/package-lock.json'
       - name: Install dependencies
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm ci
       - name: Run tests
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm run test:run
 
   build:
@@ -63,10 +63,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'kicad-collab/viewer/package-lock.json'
+          cache-dependency-path: 'viewer/package-lock.json'
       - name: Install dependencies
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm ci
       - name: Build
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm run build

@@ -22,12 +22,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'kicad-collab/viewer/package-lock.json'
+          cache-dependency-path: 'viewer/package-lock.json'
       - name: Install dependencies
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm ci
       - name: Run ESLint
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm run lint
 
   test:
@@ -39,12 +39,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'kicad-collab/viewer/package-lock.json'
+          cache-dependency-path: 'viewer/package-lock.json'
       - name: Install dependencies
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm ci
       - name: Run tests
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm run test:run
 
   build:
@@ -56,19 +56,19 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'kicad-collab/viewer/package-lock.json'
+          cache-dependency-path: 'viewer/package-lock.json'
       - name: Install dependencies
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm ci
       - name: Build
-        working-directory: kicad-collab/viewer
+        working-directory: viewer
         run: npm run build
         env:
           GITHUB_PAGES: true
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: kicad-collab/viewer/dist
+          path: viewer/dist
 
   deploy:
     environment:
