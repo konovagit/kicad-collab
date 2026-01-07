@@ -402,5 +402,71 @@ describe('SchematicViewer', () => {
       // Zoom should increase by 10%
       expect(useViewerStore.getState().zoom).toBeCloseTo(1.1, 1);
     });
+
+    it('cancels drag when mouse leaves container', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Start drag
+      fireEvent.mouseDown(container, { button: 0, clientX: 100, clientY: 100 });
+      expect(container).toHaveStyle({ cursor: 'grabbing' });
+
+      // Mouse leaves container
+      fireEvent.mouseLeave(container);
+
+      // Drag should be cancelled - cursor back to grab
+      expect(container).toHaveStyle({ cursor: 'grab' });
+    });
+
+    it('respects zoom bounds at UI level', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      // Start at minimum zoom
+      useViewerStore.setState({ zoom: 0.1 });
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Mock getBoundingClientRect
+      vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 600,
+        right: 800,
+        bottom: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      // Try to zoom out further (should be clamped to MIN_ZOOM)
+      fireEvent.wheel(container, { deltaY: 100, clientX: 400, clientY: 300 });
+      fireEvent.wheel(container, { deltaY: 100, clientX: 400, clientY: 300 });
+
+      // Should not go below 10%
+      expect(useViewerStore.getState().zoom).toBeGreaterThanOrEqual(0.1);
+      expect(screen.getByTestId('zoom-indicator').textContent).toMatch(/10%/);
+    });
   });
 });
