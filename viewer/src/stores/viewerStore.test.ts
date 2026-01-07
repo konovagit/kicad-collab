@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useViewerStore } from './viewerStore';
+import { DEFAULT_PAN, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useViewerStore } from './viewerStore';
 
 // Sample SVG content for testing
 const mockSvgContent = '<svg><rect/></svg>';
@@ -13,6 +13,8 @@ describe('viewerStore', () => {
       svg: null,
       isLoadingSvg: false,
       loadError: null,
+      zoom: DEFAULT_ZOOM,
+      pan: DEFAULT_PAN,
     });
     vi.restoreAllMocks();
   });
@@ -153,6 +155,103 @@ describe('viewerStore', () => {
       expect(state.svg).toBeNull();
       expect(state.isLoadingSvg).toBe(false);
       expect(state.loadError).toContain('HTTP 500');
+    });
+  });
+
+  describe('zoom state (Story 2.1)', () => {
+    it('initializes with default zoom value', () => {
+      const state = useViewerStore.getState();
+      expect(state.zoom).toBe(DEFAULT_ZOOM);
+      expect(state.zoom).toBe(1.0);
+    });
+
+    it('sets zoom to a valid value', () => {
+      const { setZoom } = useViewerStore.getState();
+      setZoom(2.0);
+      expect(useViewerStore.getState().zoom).toBe(2.0);
+    });
+
+    it('clamps zoom to maximum bound', () => {
+      const { setZoom } = useViewerStore.getState();
+      setZoom(10.0); // Above MAX_ZOOM (5.0)
+      expect(useViewerStore.getState().zoom).toBe(MAX_ZOOM);
+    });
+
+    it('clamps zoom to minimum bound', () => {
+      const { setZoom } = useViewerStore.getState();
+      setZoom(0.01); // Below MIN_ZOOM (0.1)
+      expect(useViewerStore.getState().zoom).toBe(MIN_ZOOM);
+    });
+
+    it('allows zoom at boundary values', () => {
+      const { setZoom } = useViewerStore.getState();
+
+      setZoom(MIN_ZOOM);
+      expect(useViewerStore.getState().zoom).toBe(MIN_ZOOM);
+
+      setZoom(MAX_ZOOM);
+      expect(useViewerStore.getState().zoom).toBe(MAX_ZOOM);
+    });
+  });
+
+  describe('pan state (Story 2.1)', () => {
+    it('initializes with default pan value', () => {
+      const state = useViewerStore.getState();
+      expect(state.pan).toEqual(DEFAULT_PAN);
+      expect(state.pan).toEqual({ x: 0, y: 0 });
+    });
+
+    it('sets pan to a new position', () => {
+      const { setPan } = useViewerStore.getState();
+      setPan({ x: 100, y: 200 });
+      expect(useViewerStore.getState().pan).toEqual({ x: 100, y: 200 });
+    });
+
+    it('allows negative pan values', () => {
+      const { setPan } = useViewerStore.getState();
+      setPan({ x: -50, y: -75 });
+      expect(useViewerStore.getState().pan).toEqual({ x: -50, y: -75 });
+    });
+  });
+
+  describe('resetView (Story 2.1)', () => {
+    it('resets zoom and pan to defaults', () => {
+      const { setZoom, setPan, resetView } = useViewerStore.getState();
+
+      // Set non-default values
+      setZoom(3.0);
+      setPan({ x: 150, y: -200 });
+
+      // Verify changed
+      expect(useViewerStore.getState().zoom).toBe(3.0);
+      expect(useViewerStore.getState().pan).toEqual({ x: 150, y: -200 });
+
+      // Reset
+      resetView();
+
+      // Verify defaults restored
+      expect(useViewerStore.getState().zoom).toBe(DEFAULT_ZOOM);
+      expect(useViewerStore.getState().pan).toEqual(DEFAULT_PAN);
+    });
+
+    it('does not affect other state when resetting view', () => {
+      // Set up state
+      useViewerStore.setState({
+        svg: mockSvgContent,
+        isInitialized: true,
+        zoom: 2.5,
+        pan: { x: 100, y: 100 },
+      });
+
+      const { resetView } = useViewerStore.getState();
+      resetView();
+
+      const state = useViewerStore.getState();
+      expect(state.zoom).toBe(DEFAULT_ZOOM);
+      expect(state.pan).toEqual(DEFAULT_PAN);
+      // Other state preserved
+      expect(state.svg).toBe(mockSvgContent);
+      expect(state.isInitialized).toBe(true);
     });
   });
 });

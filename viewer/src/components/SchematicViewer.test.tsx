@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useViewerStore } from '@/stores/viewerStore';
+import { DEFAULT_PAN, DEFAULT_ZOOM, useViewerStore } from '@/stores/viewerStore';
 
 import { SchematicViewer } from './SchematicViewer';
 
@@ -18,12 +18,14 @@ const mockSvgContent = `
 
 describe('SchematicViewer', () => {
   beforeEach(() => {
-    // Reset store state before each test
+    // Reset store state before each test (including pan/zoom)
     useViewerStore.setState({
       svg: null,
       isLoadingSvg: false,
       loadError: null,
       isInitialized: false,
+      zoom: DEFAULT_ZOOM,
+      pan: DEFAULT_PAN,
     });
     // Reset fetch mock
     vi.restoreAllMocks();
@@ -149,7 +151,7 @@ describe('SchematicViewer', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('renders SVG container with proper styling classes', async () => {
+  it('renders SVG container with overflow hidden for pan/zoom', async () => {
     // Mock successful fetch
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
@@ -163,9 +165,9 @@ describe('SchematicViewer', () => {
       expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
     });
 
-    // Check container has proper classes
+    // Check container has proper classes for pan/zoom
     const container = screen.getByTestId('schematic-container');
-    expect(container).toHaveClass('max-w-full', 'max-h-full', 'overflow-auto');
+    expect(container).toHaveClass('w-full', 'h-full', 'overflow-hidden');
   });
 
   it('SVG has data-ref attributes preserved for component interaction', async () => {
@@ -207,5 +209,198 @@ describe('SchematicViewer', () => {
     // The component will trigger loading via useEffect, showing loading state
     // This test verifies the loading state appears when fetch is pending
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  describe('Pan/Zoom Controls (Story 2.1)', () => {
+    it('displays zoom indicator at 100% by default', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('zoom-indicator')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('zoom-indicator')).toHaveTextContent('100%');
+    });
+
+    it('displays Fit button', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('button', { name: /fit to screen/i })).toBeInTheDocument();
+    });
+
+    it('Fit button resets zoom and pan to defaults', async () => {
+      const user = userEvent.setup();
+
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      // Set non-default zoom/pan before rendering
+      useViewerStore.setState({
+        zoom: 2.5,
+        pan: { x: 100, y: -50 },
+      });
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      // Verify non-default zoom indicator
+      expect(screen.getByTestId('zoom-indicator')).toHaveTextContent('250%');
+
+      // Click Fit button
+      const fitButton = screen.getByRole('button', { name: /fit to screen/i });
+      await user.click(fitButton);
+
+      // Verify reset to defaults
+      expect(screen.getByTestId('zoom-indicator')).toHaveTextContent('100%');
+      expect(useViewerStore.getState().zoom).toBe(DEFAULT_ZOOM);
+      expect(useViewerStore.getState().pan).toEqual(DEFAULT_PAN);
+    });
+
+    it('applies CSS transform for pan and zoom', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      // Set specific zoom/pan values
+      useViewerStore.setState({
+        zoom: 1.5,
+        pan: { x: 50, y: -25 },
+      });
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-transform-wrapper')).toBeInTheDocument();
+      });
+
+      const transformWrapper = screen.getByTestId('schematic-transform-wrapper');
+      expect(transformWrapper).toHaveStyle({
+        transform: 'translate(50px, -25px) scale(1.5)',
+      });
+    });
+
+    it('changes cursor to grabbing while dragging', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Initial cursor should be grab
+      expect(container).toHaveStyle({ cursor: 'grab' });
+
+      // Simulate mousedown (start drag)
+      fireEvent.mouseDown(container, { button: 0, clientX: 100, clientY: 100 });
+
+      // Cursor should now be grabbing
+      expect(container).toHaveStyle({ cursor: 'grabbing' });
+
+      // Simulate mouseup (end drag)
+      fireEvent.mouseUp(container);
+
+      // Cursor should be back to grab
+      expect(container).toHaveStyle({ cursor: 'grab' });
+    });
+
+    it('updates pan on mouse drag', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Initial pan is (0, 0)
+      expect(useViewerStore.getState().pan).toEqual({ x: 0, y: 0 });
+
+      // Start drag at (100, 100)
+      fireEvent.mouseDown(container, { button: 0, clientX: 100, clientY: 100 });
+
+      // Move to (200, 150) - delta is (100, 50)
+      fireEvent.mouseMove(container, { clientX: 200, clientY: 150 });
+
+      // Pan should be updated
+      expect(useViewerStore.getState().pan).toEqual({ x: 100, y: 50 });
+
+      // End drag
+      fireEvent.mouseUp(container);
+    });
+
+    it('updates zoom on wheel scroll', async () => {
+      // Mock successful fetch
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(mockSvgContent),
+      } as Response);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Mock getBoundingClientRect for the container
+      vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 600,
+        right: 800,
+        bottom: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      });
+
+      // Initial zoom
+      expect(useViewerStore.getState().zoom).toBe(1.0);
+
+      // Wheel up (zoom in) - negative deltaY
+      fireEvent.wheel(container, { deltaY: -100, clientX: 400, clientY: 300 });
+
+      // Zoom should increase by 10%
+      expect(useViewerStore.getState().zoom).toBeCloseTo(1.1, 1);
+    });
   });
 });

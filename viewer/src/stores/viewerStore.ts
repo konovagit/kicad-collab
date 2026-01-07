@@ -2,6 +2,12 @@ import { create } from 'zustand';
 
 import type { Result } from '@/types';
 
+// Pan/Zoom constants (Story 2.1)
+export const MIN_ZOOM = 0.1; // 10%
+export const MAX_ZOOM = 5.0; // 500%
+export const DEFAULT_ZOOM = 1.0;
+export const DEFAULT_PAN = { x: 0, y: 0 };
+
 interface ViewerState {
   // Initialization
   isInitialized: boolean;
@@ -15,6 +21,15 @@ interface ViewerState {
   // SVG actions - returns Result type per architecture pattern
   loadSnapshot: () => Promise<Result<string, Error>>;
   clearError: () => void;
+
+  // Pan/Zoom state (Story 2.1)
+  zoom: number;
+  pan: { x: number; y: number };
+
+  // Pan/Zoom actions (Story 2.1)
+  setZoom: (zoom: number) => void;
+  setPan: (pan: { x: number; y: number }) => void;
+  resetView: () => void;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -69,4 +84,23 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   },
 
   clearError: () => set({ loadError: null }),
+
+  // Pan/Zoom state (Story 2.1)
+  zoom: DEFAULT_ZOOM,
+  pan: DEFAULT_PAN,
+
+  // Pan/Zoom actions (Story 2.1)
+  setZoom: (zoom: number) => {
+    // Clamp zoom to valid bounds
+    const clampedZoom = Math.min(Math.max(zoom, MIN_ZOOM), MAX_ZOOM);
+    set({ zoom: clampedZoom });
+  },
+
+  setPan: (pan: { x: number; y: number }) => {
+    set({ pan });
+  },
+
+  resetView: () => {
+    set({ zoom: DEFAULT_ZOOM, pan: DEFAULT_PAN });
+  },
 }));

@@ -1,14 +1,29 @@
+import { usePanZoom } from '@/hooks/usePanZoom';
 import { useSchematic } from '@/hooks/useSchematic';
 
 /**
  * Main schematic viewer component.
  * Displays the SVG schematic with loading and error states.
+ * Supports pan (drag) and zoom (scroll) interactions.
  *
  * SVG is rendered inline (not as img) to allow future interactivity
  * with component elements via data-ref attributes.
+ *
+ * Uses CSS transform on wrapper div (not SVG viewBox) for GPU-accelerated rendering.
  */
 export function SchematicViewer() {
   const { svg, isLoadingSvg, loadError, reload } = useSchematic();
+  const {
+    zoom,
+    pan,
+    isDragging,
+    handleWheel,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleMouseLeave,
+    resetView,
+  } = usePanZoom();
 
   // Loading state
   if (isLoadingSvg) {
@@ -70,15 +85,52 @@ export function SchematicViewer() {
     );
   }
 
-  // Success state - render SVG inline
+  // Success state - render SVG inline with pan/zoom support
   return (
-    <div className="w-full h-screen flex items-center justify-center bg-gray-100 p-4">
+    <div className="relative w-full h-screen bg-gray-100 overflow-hidden">
+      {/* Pan/Zoom container - captures all mouse events */}
       <div
-        className="max-w-full max-h-full overflow-auto bg-white rounded-lg shadow-lg"
+        className="w-full h-full overflow-hidden"
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         data-testid="schematic-container"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       >
-        {/* SVG rendered inline for future interactivity with data-ref elements */}
-        <div className="schematic-svg" dangerouslySetInnerHTML={{ __html: svg }} />
+        {/* Transform wrapper - applies pan and zoom via CSS transform */}
+        <div
+          className="transform-gpu origin-top-left w-full h-full flex items-center justify-center"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          }}
+          data-testid="schematic-transform-wrapper"
+        >
+          {/* SVG rendered inline for future interactivity with data-ref elements */}
+          <div
+            className="schematic-svg bg-white rounded-lg shadow-lg p-4"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </div>
+      </div>
+
+      {/* Zoom controls overlay */}
+      <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-white/90 rounded-lg shadow-md px-3 py-2">
+        <span
+          className="text-sm text-gray-600 min-w-[3rem] text-center"
+          data-testid="zoom-indicator"
+        >
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          onClick={resetView}
+          className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+          type="button"
+          aria-label="Fit to screen"
+        >
+          Fit
+        </button>
       </div>
     </div>
   );
