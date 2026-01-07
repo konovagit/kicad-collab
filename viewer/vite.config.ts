@@ -7,7 +7,7 @@ import path from 'path';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Set base to repository name for GitHub Pages deployment
-  base: process.env.GITHUB_PAGES ? '/KLP-5e-ESP32-sensor-board-main/' : '/',
+  base: process.env.GITHUB_PAGES ? '/kicad-collab/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
