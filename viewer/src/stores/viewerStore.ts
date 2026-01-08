@@ -46,6 +46,11 @@ interface ViewerState {
   // Hover state (Story 2.3)
   hoveredRef: string | null;
   setHoveredRef: (ref: string | null) => void;
+
+  // Selection state (Story 2.4)
+  selectedRef: string | null;
+  selectComponent: (ref: string | null) => void;
+  clearSelection: () => void;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -164,4 +169,9 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   // Hover state (Story 2.3)
   hoveredRef: null,
   setHoveredRef: (ref: string | null) => set({ hoveredRef: ref }),
+
+  // Selection state (Story 2.4)
+  selectedRef: null,
+  selectComponent: (ref: string | null) => set({ selectedRef: ref }),
+  clearSelection: () => set({ selectedRef: null }),
 }));

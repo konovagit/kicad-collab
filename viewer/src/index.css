@@ -9,3 +9,13 @@
 [data-ref].hovered {
   filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8));
 }
+
+/* Story 2.4: Component selection highlight styles */
+[data-ref].selected {
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.9));
+}
+
+/* Selection takes visual priority over hover */
+[data-ref].selected.hovered {
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.9));
+}

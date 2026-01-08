@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { MAX_ZOOM, MIN_ZOOM, useViewerStore } from '@/stores/viewerStore';
+
+// Minimum distance (px) mouse must move to be considered a drag
+const DRAG_THRESHOLD = 5;
 
 /**
  * Hook for pan/zoom functionality on schematic viewer.
@@ -19,6 +22,11 @@ export function usePanZoom() {
   // Local drag state (not in global store since it's transient)
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Track if a meaningful drag occurred (mouse moved beyond threshold)
+  // This persists briefly after mouseUp so click handler can check it
+  const didDragRef = useRef(false);
+  const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   /**
    * Handle mouse wheel for zoom centered on cursor position.
@@ -58,6 +66,8 @@ export function usePanZoom() {
       if (e.button !== 0) return;
 
       setIsDragging(true);
+      didDragRef.current = false; // Reset drag detection
+      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
       setDragStart({
         x: e.clientX - pan.x,
         y: e.clientY - pan.y,
@@ -73,6 +83,15 @@ export function usePanZoom() {
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!isDragging) return;
 
+      // Check if mouse moved beyond threshold (meaningful drag)
+      if (!didDragRef.current) {
+        const dx = e.clientX - mouseDownPosRef.current.x;
+        const dy = e.clientY - mouseDownPosRef.current.y;
+        if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+          didDragRef.current = true;
+        }
+      }
+
       setPan({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y,
@@ -86,6 +105,18 @@ export function usePanZoom() {
    */
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
+    // Note: didDragRef stays true so click handler can check it
+  }, []);
+
+  /**
+   * Check if a meaningful drag just occurred and reset the flag.
+   * Call this from click handlers to determine if click should be ignored.
+   * Returns true if drag occurred (click should be ignored).
+   */
+  const consumeDragState = useCallback(() => {
+    const wasDragging = didDragRef.current;
+    didDragRef.current = false;
+    return wasDragging;
   }, []);
 
   /**
@@ -110,5 +141,8 @@ export function usePanZoom() {
 
     // Actions
     resetView,
+
+    // Drag detection for click prevention
+    consumeDragState,
   };
 }

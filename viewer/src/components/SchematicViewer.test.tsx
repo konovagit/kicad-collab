@@ -37,7 +37,7 @@ function mockSuccessfulFetch(svgContent = mockSvgContent, components: object[] =
 
 describe('SchematicViewer', () => {
   beforeEach(() => {
-    // Reset store state before each test (including pan/zoom, components, and hover)
+    // Reset store state before each test (including pan/zoom, components, hover, and selection)
     useViewerStore.setState({
       svg: null,
       isLoadingSvg: false,
@@ -52,6 +52,8 @@ describe('SchematicViewer', () => {
       loadComponentsError: null,
       // Story 2.3 state
       hoveredRef: null,
+      // Story 2.4 state
+      selectedRef: null,
     });
     // Reset fetch mock
     vi.restoreAllMocks();
@@ -639,6 +641,261 @@ describe('SchematicViewer', () => {
 
       // SVG should still be displayed (graceful degradation)
       expect(screen.getByTestId('schematic-container').querySelector('svg')).toBeInTheDocument();
+    });
+  });
+
+  describe('Component Selection (Story 2.4)', () => {
+    const mockComponents = [
+      { ref: 'R1', value: '10k', footprint: 'Resistor_SMD:R_0805', posX: 130, posY: 110 },
+      { ref: 'C1', value: '100nF', footprint: 'Capacitor_SMD:C_0805', posX: 255, posY: 110 },
+    ];
+
+    const mockSvgWithComponents = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+        <g data-ref="R1" data-value="10k"><rect x="100" y="100" width="60" height="20"/></g>
+        <g data-ref="C1" data-value="100nF"><rect x="200" y="100" width="60" height="20"/></g>
+        <rect x="400" y="400" width="100" height="100"/>
+      </svg>
+    `;
+
+    beforeEach(() => {
+      useViewerStore.setState({
+        svg: null,
+        isLoadingSvg: false,
+        loadError: null,
+        isInitialized: false,
+        zoom: DEFAULT_ZOOM,
+        pan: DEFAULT_PAN,
+        components: [],
+        componentIndex: new Map(),
+        isLoadingComponents: false,
+        loadComponentsError: null,
+        hoveredRef: null,
+        selectedRef: null,
+      });
+    });
+
+    it('selects component when clicked', async () => {
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      // Wait for component index to be built
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Click on component
+      fireEvent.click(r1Element!);
+
+      // Check selection state
+      expect(useViewerStore.getState().selectedRef).toBe('R1');
+    });
+
+    it('applies selected class to selected component', async () => {
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Click to select
+      fireEvent.click(r1Element!);
+
+      // Element should have selected class (re-query to get current DOM state)
+      await waitFor(() => {
+        const element = container.querySelector('[data-ref="R1"]');
+        expect(element).toHaveClass('selected');
+      });
+    });
+
+    it('shows detail panel when component is selected', async () => {
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Click to select
+      fireEvent.click(r1Element!);
+
+      // Detail panel should appear
+      await waitFor(() => {
+        expect(screen.getByText('Component Details')).toBeInTheDocument();
+      });
+
+      // Component info should be displayed
+      expect(screen.getByText('R1')).toBeInTheDocument();
+      expect(screen.getByText('10k')).toBeInTheDocument();
+    });
+
+    it('clears selection when clicking empty space', async () => {
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // First select a component
+      fireEvent.click(r1Element!);
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().selectedRef).toBe('R1');
+      });
+
+      // Click on container background (empty space - not on any data-ref element)
+      // The click handler will check if target.closest('[data-ref]') returns null
+      fireEvent.click(container);
+
+      // Selection should be cleared
+      await waitFor(() => {
+        expect(useViewerStore.getState().selectedRef).toBeNull();
+      });
+    });
+
+    it('switches selection when clicking different component', async () => {
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Select R1
+      const r1Element = container.querySelector('[data-ref="R1"]');
+      fireEvent.click(r1Element!);
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().selectedRef).toBe('R1');
+      });
+
+      // Select C1
+      const c1Element = container.querySelector('[data-ref="C1"]');
+      fireEvent.click(c1Element!);
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().selectedRef).toBe('C1');
+      });
+
+      // R1 should no longer have selected class, C1 should have it (re-query DOM)
+      await waitFor(() => {
+        const r1 = container.querySelector('[data-ref="R1"]');
+        const c1 = container.querySelector('[data-ref="C1"]');
+        expect(r1).not.toHaveClass('selected');
+        expect(c1).toHaveClass('selected');
+      });
+    });
+
+    it('closes detail panel when close button clicked', async () => {
+      const user = userEvent.setup();
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Select component
+      fireEvent.click(r1Element!);
+
+      await waitFor(() => {
+        expect(screen.getByText('Component Details')).toBeInTheDocument();
+      });
+
+      // Click close button
+      const closeButton = screen.getByRole('button', { name: /close/i });
+      await user.click(closeButton);
+
+      // Detail panel should disappear
+      await waitFor(() => {
+        expect(screen.queryByText('Component Details')).not.toBeInTheDocument();
+      });
+
+      // Selection should be cleared
+      expect(useViewerStore.getState().selectedRef).toBeNull();
+    });
+
+    it('selection persists after other interactions', async () => {
+      mockSuccessfulFetch(mockSvgWithComponents, mockComponents);
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Select R1
+      fireEvent.click(r1Element!);
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().selectedRef).toBe('R1');
+      });
+
+      // Selection should persist - verify detail panel shows correct component
+      expect(screen.getByText('R1')).toBeInTheDocument();
+      expect(screen.getByText('10k')).toBeInTheDocument();
+
+      // Verify selection class is applied
+      await waitFor(() => {
+        const element = container.querySelector('[data-ref="R1"]');
+        expect(element).toHaveClass('selected');
+      });
     });
   });
 });

@@ -29,6 +29,8 @@ describe('viewerStore', () => {
       loadComponentsError: null,
       // Story 2.3 state
       hoveredRef: null,
+      // Story 2.4 state
+      selectedRef: null,
     });
     vi.restoreAllMocks();
   });
@@ -442,6 +444,65 @@ describe('viewerStore', () => {
       expect(state.svg).toBe(mockSvgContent);
       expect(state.zoom).toBe(2.0);
       expect(state.pan).toEqual({ x: 100, y: 50 });
+    });
+  });
+
+  describe('selection state (Story 2.4)', () => {
+    it('initializes selectedRef as null', () => {
+      const state = useViewerStore.getState();
+      expect(state.selectedRef).toBeNull();
+    });
+
+    it('selectComponent sets the selected ref', () => {
+      const { selectComponent } = useViewerStore.getState();
+      selectComponent('R1');
+      expect(useViewerStore.getState().selectedRef).toBe('R1');
+    });
+
+    it('selectComponent(null) clears selection', () => {
+      const { selectComponent } = useViewerStore.getState();
+      selectComponent('R1');
+      expect(useViewerStore.getState().selectedRef).toBe('R1');
+
+      selectComponent(null);
+      expect(useViewerStore.getState().selectedRef).toBeNull();
+    });
+
+    it('clearSelection clears selection', () => {
+      const { selectComponent, clearSelection } = useViewerStore.getState();
+      selectComponent('R1');
+      expect(useViewerStore.getState().selectedRef).toBe('R1');
+
+      clearSelection();
+      expect(useViewerStore.getState().selectedRef).toBeNull();
+    });
+
+    it('updates selectedRef when changing to different component', () => {
+      const { selectComponent } = useViewerStore.getState();
+      selectComponent('R1');
+      expect(useViewerStore.getState().selectedRef).toBe('R1');
+
+      selectComponent('C1');
+      expect(useViewerStore.getState().selectedRef).toBe('C1');
+    });
+
+    it('does not affect other state when setting selectedRef', () => {
+      useViewerStore.setState({
+        svg: mockSvgContent,
+        zoom: 2.0,
+        pan: { x: 100, y: 50 },
+        hoveredRef: 'C1',
+      });
+
+      const { selectComponent } = useViewerStore.getState();
+      selectComponent('R1');
+
+      const state = useViewerStore.getState();
+      expect(state.selectedRef).toBe('R1');
+      expect(state.svg).toBe(mockSvgContent);
+      expect(state.zoom).toBe(2.0);
+      expect(state.pan).toEqual({ x: 100, y: 50 });
+      expect(state.hoveredRef).toBe('C1');
     });
   });
 

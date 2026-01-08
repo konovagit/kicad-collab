@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import { useComponentMapping } from '@/hooks/useComponentMapping';
 import { useComponentHover } from '@/hooks/useComponentHover';
+import { useComponentSelection } from '@/hooks/useComponentSelection';
 import { usePanZoom } from '@/hooks/usePanZoom';
 import { useSchematic } from '@/hooks/useSchematic';
 import { useViewerStore } from '@/stores/viewerStore';
 
+import { ComponentDetailPanel } from './ComponentDetailPanel';
 import { ComponentTooltip } from './ComponentTooltip';
 
 /**
@@ -32,6 +34,7 @@ export function SchematicViewer() {
     handleMouseUp,
     handleMouseLeave: handlePanZoomMouseLeave,
     resetView,
+    consumeDragState,
   } = usePanZoom();
 
   // Story 2.2: Component mapping - loads components.json and builds index
@@ -42,6 +45,13 @@ export function SchematicViewer() {
   const { hoveredRef, handleMouseEnter, handleMouseLeave: clearHover } = useComponentHover();
   const getComponent = useViewerStore((s) => s.getComponent);
 
+  // Story 2.4: Component selection state management
+  const {
+    selectedRef,
+    handleClick: selectComponent,
+    handleClickOutside: clearSelection,
+  } = useComponentSelection();
+
   // Track mouse position for tooltip
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
@@ -50,22 +60,59 @@ export function SchematicViewer() {
 
   // Story 2.3: Apply/remove .hovered class when hoveredRef changes
   useEffect(() => {
-    if (!svgContainerRef.current) return;
+    const container = svgContainerRef.current;
+    if (!container) return;
 
     // Remove previous highlight
-    const prevHighlighted = svgContainerRef.current.querySelector('.hovered');
+    const prevHighlighted = container.querySelector('.hovered');
     if (prevHighlighted) {
       prevHighlighted.classList.remove('hovered');
     }
 
     // Add highlight to current hovered element
     if (hoveredRef) {
-      const element = svgContainerRef.current.querySelector(`[data-ref="${hoveredRef}"]`);
+      const element = container.querySelector(`[data-ref="${hoveredRef}"]`);
       if (element) {
         element.classList.add('hovered');
       }
     }
+
+    // Cleanup: Remove hovered class on unmount or before next effect
+    return () => {
+      const highlighted = container.querySelector('.hovered');
+      if (highlighted) {
+        highlighted.classList.remove('hovered');
+      }
+    };
   }, [hoveredRef]);
+
+  // Story 2.4: Apply/remove .selected class when selectedRef changes
+  useEffect(() => {
+    const container = svgContainerRef.current;
+    if (!container) return;
+
+    // Remove previous selection
+    const prevSelected = container.querySelector('.selected');
+    if (prevSelected) {
+      prevSelected.classList.remove('selected');
+    }
+
+    // Add selection to current selected element
+    if (selectedRef) {
+      const element = container.querySelector(`[data-ref="${selectedRef}"]`);
+      if (element) {
+        element.classList.add('selected');
+      }
+    }
+
+    // Cleanup: Remove selected class on unmount or before next effect
+    return () => {
+      const selected = container.querySelector('.selected');
+      if (selected) {
+        selected.classList.remove('selected');
+      }
+    };
+  }, [selectedRef]);
 
   // Story 2.3: Event delegation for hover detection
   const handleSvgMouseOver = useCallback(
@@ -96,6 +143,42 @@ export function SchematicViewer() {
     [clearHover]
   );
 
+  // Story 2.4: Event delegation for click/selection detection
+  const handleSvgClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Skip click handling if user just finished dragging (pan)
+      if (consumeDragState()) {
+        return;
+      }
+
+      const target = e.target as Element;
+      const componentEl = target.closest('[data-ref]');
+
+      if (componentEl) {
+        const ref = componentEl.getAttribute('data-ref');
+        if (ref) {
+          selectComponent(ref);
+        }
+      } else {
+        // Clicked on empty space - clear selection
+        clearSelection();
+      }
+    },
+    [selectComponent, clearSelection, consumeDragState]
+  );
+
+  // Story 2.4: Keyboard handler for accessibility
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      // Escape clears selection
+      if (e.key === 'Escape' && selectedRef) {
+        e.preventDefault();
+        clearSelection();
+      }
+    },
+    [selectedRef, clearSelection]
+  );
+
   // Track mouse position for tooltip
   const handleSvgMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -116,6 +199,9 @@ export function SchematicViewer() {
 
   // Get hovered component data for tooltip
   const hoveredComponent = hoveredRef ? getComponent(hoveredRef) : null;
+
+  // Story 2.4: Get selected component data for detail panel
+  const selectedComponent = selectedRef ? getComponent(selectedRef) : null;
 
   // Loading state
   if (isLoadingSvg) {
@@ -180,11 +266,14 @@ export function SchematicViewer() {
   // Success state - render SVG inline with pan/zoom support
   return (
     <div className="relative w-full h-screen bg-gray-100 overflow-hidden">
-      {/* Pan/Zoom container - captures all mouse events */}
+      {/* Pan/Zoom container - captures all mouse and keyboard events */}
       <div
-        className="w-full h-full overflow-hidden"
+        className="w-full h-full overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         data-testid="schematic-container"
+        tabIndex={0}
+        role="application"
+        aria-label="Schematic viewer. Use mouse to pan and zoom. Press Escape to clear selection."
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleSvgMouseMove}
@@ -192,6 +281,8 @@ export function SchematicViewer() {
         onMouseLeave={handleContainerMouseLeave}
         onMouseOver={handleSvgMouseOver}
         onMouseOut={handleSvgMouseOut}
+        onClick={handleSvgClick}
+        onKeyDown={handleKeyDown}
       >
         {/* Transform wrapper - applies pan and zoom via CSS transform */}
         <div
@@ -213,6 +304,11 @@ export function SchematicViewer() {
       {/* Component tooltip (Story 2.3) */}
       {hoveredComponent && (
         <ComponentTooltip component={hoveredComponent} position={mousePosition} />
+      )}
+
+      {/* Component detail panel (Story 2.4) */}
+      {selectedComponent && (
+        <ComponentDetailPanel component={selectedComponent} onClose={clearSelection} />
       )}
 
       {/* Zoom controls overlay */}
