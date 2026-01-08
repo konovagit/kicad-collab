@@ -16,9 +16,28 @@ const mockSvgContent = `
 </svg>
 `;
 
+// Helper to mock both SVG and components.json fetch
+function mockSuccessfulFetch(svgContent = mockSvgContent, components: object[] = []) {
+  vi.spyOn(global, 'fetch').mockImplementation((url) => {
+    if (String(url).includes('sample-schematic.svg')) {
+      return Promise.resolve({
+        ok: true,
+        text: () => Promise.resolve(svgContent),
+      } as Response);
+    }
+    if (String(url).includes('components.json')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(components),
+      } as Response);
+    }
+    return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+  });
+}
+
 describe('SchematicViewer', () => {
   beforeEach(() => {
-    // Reset store state before each test (including pan/zoom)
+    // Reset store state before each test (including pan/zoom, components, and hover)
     useViewerStore.setState({
       svg: null,
       isLoadingSvg: false,
@@ -26,6 +45,13 @@ describe('SchematicViewer', () => {
       isInitialized: false,
       zoom: DEFAULT_ZOOM,
       pan: DEFAULT_PAN,
+      // Story 2.2 state
+      components: [],
+      componentIndex: new Map(),
+      isLoadingComponents: false,
+      loadComponentsError: null,
+      // Story 2.3 state
+      hoveredRef: null,
     });
     // Reset fetch mock
     vi.restoreAllMocks();
@@ -45,11 +71,7 @@ describe('SchematicViewer', () => {
   });
 
   it('displays the schematic SVG when loaded successfully', async () => {
-    // Mock successful fetch
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(mockSvgContent),
-    } as Response);
+    mockSuccessfulFetch();
 
     render(<SchematicViewer />);
 
@@ -120,17 +142,30 @@ describe('SchematicViewer', () => {
   it('has retry button that reloads the schematic', async () => {
     const user = userEvent.setup();
 
-    // First call fails, second succeeds
-    const fetchMock = vi
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(mockSvgContent),
-      } as Response);
+    // First call fails for SVG, then success on retry (plus components.json call)
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation((url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('sample-schematic.svg')) {
+        // First call fails, second succeeds
+        if (fetchMock.mock.calls.filter((c) => String(c[0]).includes('svg')).length <= 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve(mockSvgContent),
+        } as Response);
+      }
+      if (urlStr.includes('components.json')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
 
     render(<SchematicViewer />);
 
@@ -148,7 +183,9 @@ describe('SchematicViewer', () => {
       expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Verify SVG fetch was called twice (failed + success)
+    const svgCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('svg'));
+    expect(svgCalls).toHaveLength(2);
   });
 
   it('renders SVG container with overflow hidden for pan/zoom', async () => {

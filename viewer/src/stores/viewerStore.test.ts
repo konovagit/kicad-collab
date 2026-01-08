@@ -27,6 +27,8 @@ describe('viewerStore', () => {
       componentIndex: new Map(),
       isLoadingComponents: false,
       loadComponentsError: null,
+      // Story 2.3 state
+      hoveredRef: null,
     });
     vi.restoreAllMocks();
   });
@@ -392,6 +394,54 @@ describe('viewerStore', () => {
       expect(state.componentIndex.size).toBe(1);
       expect(state.componentIndex.has('R1')).toBe(false);
       expect(state.componentIndex.has('C1')).toBe(true);
+    });
+  });
+
+  describe('hover state (Story 2.3)', () => {
+    it('initializes hoveredRef as null', () => {
+      const state = useViewerStore.getState();
+      expect(state.hoveredRef).toBeNull();
+    });
+
+    it('sets hoveredRef to a component ref', () => {
+      const { setHoveredRef } = useViewerStore.getState();
+      setHoveredRef('R1');
+      expect(useViewerStore.getState().hoveredRef).toBe('R1');
+    });
+
+    it('clears hoveredRef when set to null', () => {
+      const { setHoveredRef } = useViewerStore.getState();
+      setHoveredRef('R1');
+      expect(useViewerStore.getState().hoveredRef).toBe('R1');
+
+      setHoveredRef(null);
+      expect(useViewerStore.getState().hoveredRef).toBeNull();
+    });
+
+    it('updates hoveredRef when changing to different component', () => {
+      const { setHoveredRef } = useViewerStore.getState();
+      setHoveredRef('R1');
+      expect(useViewerStore.getState().hoveredRef).toBe('R1');
+
+      setHoveredRef('C1');
+      expect(useViewerStore.getState().hoveredRef).toBe('C1');
+    });
+
+    it('does not affect other state when setting hoveredRef', () => {
+      useViewerStore.setState({
+        svg: mockSvgContent,
+        zoom: 2.0,
+        pan: { x: 100, y: 50 },
+      });
+
+      const { setHoveredRef } = useViewerStore.getState();
+      setHoveredRef('R1');
+
+      const state = useViewerStore.getState();
+      expect(state.hoveredRef).toBe('R1');
+      expect(state.svg).toBe(mockSvgContent);
+      expect(state.zoom).toBe(2.0);
+      expect(state.pan).toEqual({ x: 100, y: 50 });
     });
   });
 

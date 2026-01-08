@@ -34,11 +34,18 @@ export function useComponentMapping() {
   // Track if we've logged warnings to avoid duplicate logs
   const hasLoggedWarnings = useRef(false);
 
+  // Track if we've attempted to load components (to prevent retries on empty array)
+  const hasAttemptedLoad = useRef(false);
+
   // Load components when SVG becomes available
   useEffect(() => {
-    if (!svg || isLoadingComponents || components.length > 0) {
+    // Don't load if: no SVG, already loading, already have components, or already attempted
+    if (!svg || isLoadingComponents || components.length > 0 || hasAttemptedLoad.current) {
       return;
     }
+
+    // Mark as attempted before loading
+    hasAttemptedLoad.current = true;
 
     // Load components.json
     loadComponents();

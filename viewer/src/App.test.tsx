@@ -23,6 +23,8 @@ describe('App', () => {
       isLoadingSvg: false,
       loadError: null,
       isInitialized: false,
+      // Story 2.3 state
+      hoveredRef: null,
     });
     // Reset fetch mock
     vi.restoreAllMocks();

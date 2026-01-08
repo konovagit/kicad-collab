@@ -42,6 +42,10 @@ interface ViewerState {
   loadComponents: () => Promise<Result<Component[], Error>>;
   setComponentIndex: (index: Map<string, Component>) => void;
   getComponent: (ref: string) => Component | undefined;
+
+  // Hover state (Story 2.3)
+  hoveredRef: string | null;
+  setHoveredRef: (ref: string | null) => void;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -156,4 +160,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   getComponent: (ref: string): Component | undefined => {
     return get().componentIndex.get(ref);
   },
+
+  // Hover state (Story 2.3)
+  hoveredRef: null,
+  setHoveredRef: (ref: string | null) => set({ hoveredRef: ref }),
 }));

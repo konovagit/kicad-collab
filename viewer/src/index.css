@@ -1,1 +1,11 @@
 @import 'tailwindcss';
+
+/* Story 2.3: Component hover highlight styles */
+[data-ref] {
+  cursor: pointer;
+  transition: filter 150ms ease;
+}
+
+[data-ref].hovered {
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8));
+}
