@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { Component, Result } from '@/types';
+import type { Comment, Component, Result } from '@/types';
 import { loadComponents as loadComponentsFromFile } from '@/utils/componentLoader';
 
 // Pan/Zoom constants (Story 2.1)
@@ -51,6 +51,13 @@ interface ViewerState {
   selectedRef: string | null;
   selectComponent: (ref: string | null) => void;
   clearSelection: () => void;
+
+  // Comment state (Story 3.1)
+  comments: Comment[];
+  isLoadingComments: boolean;
+  loadCommentsError: string | null;
+  loadComments: () => Promise<Result<Comment[], Error>>;
+  setComments: (comments: Comment[]) => void;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -174,4 +181,50 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   selectedRef: null,
   selectComponent: (ref: string | null) => set({ selectedRef: ref }),
   clearSelection: () => set({ selectedRef: null }),
+
+  // Comment state (Story 3.1)
+  comments: [],
+  isLoadingComments: false,
+  loadCommentsError: null,
+
+  loadComments: async (): Promise<Result<Comment[], Error>> => {
+    // Prevent duplicate loads
+    if (get().isLoadingComments) {
+      return { ok: false, error: new Error('Load already in progress') };
+    }
+
+    set({ isLoadingComments: true, loadCommentsError: null });
+
+    try {
+      const response = await fetch('/fixtures/comments.json');
+
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`);
+        set({
+          isLoadingComments: false,
+          loadCommentsError: `Failed to load comments: HTTP ${response.status}`,
+          comments: [],
+        });
+        return { ok: false, error };
+      }
+
+      const comments = (await response.json()) as Comment[];
+      set({
+        comments,
+        isLoadingComments: false,
+        loadCommentsError: null,
+      });
+      return { ok: true, data: comments };
+    } catch (error) {
+      const errorObj = error instanceof Error ? error : new Error('Unknown error occurred');
+      set({
+        isLoadingComments: false,
+        loadCommentsError: `Failed to load comments: ${errorObj.message}`,
+        comments: [],
+      });
+      return { ok: false, error: errorObj };
+    }
+  },
+
+  setComments: (comments: Comment[]) => set({ comments }),
 }));

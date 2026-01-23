@@ -245,11 +245,11 @@ describe('validateComments', () => {
 
     expect(result.ok).toBe(true);
     if (isOk(result)) {
-      expect(result.data).toHaveLength(3);
-      expect(result.data[0].author).toBe('Reviewer');
+      expect(result.data).toHaveLength(4);
+      expect(result.data[0].author).toBe('Alice Chen');
       expect(result.data[0].componentRef).toBe('C1');
-      expect(result.data[1].parentId).toBe('550e8400-e29b-41d4-a716-446655440001');
-      expect(result.data[2].status).toBe('resolved');
+      expect(result.data[1].status).toBe('resolved');
+      expect(result.data[2].componentRef).toBeUndefined(); // General comment
     }
   });
 

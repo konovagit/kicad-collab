@@ -7,6 +7,7 @@ import { usePanZoom } from '@/hooks/usePanZoom';
 import { useSchematic } from '@/hooks/useSchematic';
 import { useViewerStore } from '@/stores/viewerStore';
 
+import { CommentPanel } from './CommentPanel';
 import { ComponentDetailPanel } from './ComponentDetailPanel';
 import { ComponentTooltip } from './ComponentTooltip';
 
@@ -40,6 +41,12 @@ export function SchematicViewer() {
   // Story 2.2: Component mapping - loads components.json and builds index
   // The hook handles loading after SVG is available and logs warnings in dev mode
   useComponentMapping();
+
+  // Story 3.1: Load comments on mount
+  const loadComments = useViewerStore((s) => s.loadComments);
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
 
   // Story 2.3: Component hover state management
   const { hoveredRef, handleMouseEnter, handleMouseLeave: clearHover } = useComponentHover();
@@ -306,10 +313,13 @@ export function SchematicViewer() {
         <ComponentTooltip component={hoveredComponent} position={mousePosition} />
       )}
 
-      {/* Component detail panel (Story 2.4) */}
+      {/* Component detail panel (Story 2.4) - shown when component selected */}
       {selectedComponent && (
         <ComponentDetailPanel component={selectedComponent} onClose={clearSelection} />
       )}
+
+      {/* Comment panel (Story 3.1) - shown when no component is selected */}
+      {!selectedComponent && <CommentPanel />}
 
       {/* Zoom controls overlay */}
       <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-white/90 rounded-lg shadow-md px-3 py-2">

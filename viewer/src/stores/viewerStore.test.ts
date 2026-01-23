@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PAN, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useViewerStore } from './viewerStore';
-import type { Component } from '@/types';
+import type { Comment, Component } from '@/types';
 
 // Sample SVG content for testing
 const mockSvgContent = '<svg><rect/></svg>';
@@ -10,6 +10,25 @@ const mockSvgContent = '<svg><rect/></svg>';
 const mockComponents: Component[] = [
   { ref: 'R1', value: '10k', footprint: 'Resistor_SMD:R_0805', posX: 130, posY: 110 },
   { ref: 'C1', value: '100nF', footprint: 'Capacitor_SMD:C_0805', posX: 255, posY: 110 },
+];
+
+// Sample comments for testing (Story 3.1)
+const mockComments: Comment[] = [
+  {
+    id: 'comment-001',
+    author: 'Alice',
+    content: 'Check this capacitor value',
+    createdAt: '2026-01-23T10:00:00Z',
+    componentRef: 'C1',
+    status: 'open',
+  },
+  {
+    id: 'comment-002',
+    author: 'Bob',
+    content: 'Overall looks good',
+    createdAt: '2026-01-23T11:00:00Z',
+    status: 'open',
+  },
 ];
 
 describe('viewerStore', () => {
@@ -31,6 +50,10 @@ describe('viewerStore', () => {
       hoveredRef: null,
       // Story 2.4 state
       selectedRef: null,
+      // Story 3.1 state
+      comments: [],
+      isLoadingComments: false,
+      loadCommentsError: null,
     });
     vi.restoreAllMocks();
   });
@@ -537,6 +560,186 @@ describe('viewerStore', () => {
       const component = getComponent('R1');
 
       expect(component).toBeUndefined();
+    });
+  });
+
+  describe('comment state (Story 3.1)', () => {
+    it('initializes with empty comments array', () => {
+      const state = useViewerStore.getState();
+      expect(state.comments).toEqual([]);
+    });
+
+    it('initializes isLoadingComments as false', () => {
+      const state = useViewerStore.getState();
+      expect(state.isLoadingComments).toBe(false);
+    });
+
+    it('initializes loadCommentsError as null', () => {
+      const state = useViewerStore.getState();
+      expect(state.loadCommentsError).toBeNull();
+    });
+
+    it('setComments updates the comments array', () => {
+      const { setComments } = useViewerStore.getState();
+      setComments(mockComments);
+      expect(useViewerStore.getState().comments).toEqual(mockComments);
+    });
+
+    it('setComments replaces existing comments', () => {
+      // Set initial comments
+      useViewerStore.getState().setComments(mockComments);
+      expect(useViewerStore.getState().comments).toHaveLength(2);
+
+      // Replace with new comments
+      const newComments: Comment[] = [
+        {
+          id: 'new-1',
+          author: 'Carol',
+          content: 'New comment',
+          createdAt: '2026-01-23T12:00:00Z',
+          status: 'open',
+        },
+      ];
+      useViewerStore.getState().setComments(newComments);
+
+      expect(useViewerStore.getState().comments).toHaveLength(1);
+      expect(useViewerStore.getState().comments[0].author).toBe('Carol');
+    });
+
+    it('setComments with empty array clears comments', () => {
+      useViewerStore.getState().setComments(mockComments);
+      expect(useViewerStore.getState().comments).toHaveLength(2);
+
+      useViewerStore.getState().setComments([]);
+      expect(useViewerStore.getState().comments).toEqual([]);
+    });
+
+    it('does not affect other state when setting comments', () => {
+      useViewerStore.setState({
+        svg: mockSvgContent,
+        zoom: 2.0,
+        selectedRef: 'R1',
+      });
+
+      const { setComments } = useViewerStore.getState();
+      setComments(mockComments);
+
+      const state = useViewerStore.getState();
+      expect(state.comments).toEqual(mockComments);
+      expect(state.svg).toBe(mockSvgContent);
+      expect(state.zoom).toBe(2.0);
+      expect(state.selectedRef).toBe('R1');
+    });
+  });
+
+  describe('loadComments (Story 3.1)', () => {
+    it('returns Result with ok:true and comments on success', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockComments),
+      } as Response);
+
+      const { loadComments } = useViewerStore.getState();
+      const result = await loadComments();
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(2);
+        expect(result.data[0].author).toBe('Alice');
+      }
+    });
+
+    it('returns Result with ok:false on HTTP error', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 404,
+      } as Response);
+
+      const { loadComments } = useViewerStore.getState();
+      const result = await loadComments();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain('404');
+      }
+    });
+
+    it('returns Result with ok:false on network error', async () => {
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failed'));
+
+      const { loadComments } = useViewerStore.getState();
+      const result = await loadComments();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Network failed');
+      }
+    });
+
+    it('prevents duplicate loads and returns error Result', async () => {
+      useViewerStore.setState({ isLoadingComments: true });
+
+      const { loadComments } = useViewerStore.getState();
+      const result = await loadComments();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Load already in progress');
+      }
+    });
+
+    it('updates store state on successful load', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockComments),
+      } as Response);
+
+      const { loadComments } = useViewerStore.getState();
+      await loadComments();
+
+      const state = useViewerStore.getState();
+      expect(state.comments).toHaveLength(2);
+      expect(state.isLoadingComments).toBe(false);
+      expect(state.loadCommentsError).toBeNull();
+    });
+
+    it('updates store state on failed load', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 500,
+      } as Response);
+
+      const { loadComments } = useViewerStore.getState();
+      await loadComments();
+
+      const state = useViewerStore.getState();
+      expect(state.comments).toEqual([]);
+      expect(state.isLoadingComments).toBe(false);
+      expect(state.loadCommentsError).toContain('500');
+    });
+
+    it('sets isLoadingComments to true while loading', async () => {
+      let resolvePromise: (value: Comment[]) => void;
+      const pendingPromise = new Promise<Comment[]>((resolve) => {
+        resolvePromise = resolve;
+      });
+
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => pendingPromise,
+      } as Response);
+
+      const loadPromise = useViewerStore.getState().loadComments();
+
+      // Check loading state while fetch is pending
+      expect(useViewerStore.getState().isLoadingComments).toBe(true);
+
+      // Resolve the promise
+      resolvePromise!(mockComments);
+      await loadPromise;
+
+      // Loading should be false after completion
+      expect(useViewerStore.getState().isLoadingComments).toBe(false);
     });
   });
 });

@@ -1,0 +1,49 @@
+[
+  {
+    "ref": "R1",
+    "value": "10k",
+    "footprint": "Resistor_SMD:R_0805",
+    "posX": 130,
+    "posY": 110
+  },
+  {
+    "ref": "R2",
+    "value": "4.7k",
+    "footprint": "Resistor_SMD:R_0805",
+    "posX": 130,
+    "posY": 190
+  },
+  {
+    "ref": "C1",
+    "value": "100nF",
+    "footprint": "Capacitor_SMD:C_0805",
+    "posX": 255,
+    "posY": 110
+  },
+  {
+    "ref": "U1",
+    "value": "ESP32-WROOM",
+    "footprint": "Module:ESP32-WROOM-32",
+    "posX": 410,
+    "posY": 250
+  },
+  {
+    "ref": "LED1",
+    "value": "Red",
+    "footprint": "LED_SMD:LED_0805",
+    "posX": 560,
+    "posY": 120
+  },
+  {
+    "ref": "PWR1",
+    "value": "+3.3V",
+    "posX": 700,
+    "posY": 80
+  },
+  {
+    "ref": "GND1",
+    "value": "GND",
+    "posX": 700,
+    "posY": 520
+  }
+]

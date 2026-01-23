@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useViewerStore } from '@/stores/viewerStore';
@@ -15,6 +15,25 @@ const mockSvgContent = `
 </svg>
 `;
 
+// Sample comments for testing
+const mockComments = [
+  {
+    id: 'comment-001',
+    author: 'Alice',
+    content: 'Test comment',
+    createdAt: '2026-01-23T10:00:00Z',
+    componentRef: 'R1',
+    status: 'open',
+  },
+  {
+    id: 'comment-002',
+    author: 'Bob',
+    content: 'General comment',
+    createdAt: '2026-01-23T11:00:00Z',
+    status: 'open',
+  },
+];
+
 describe('App', () => {
   beforeEach(() => {
     // Reset store state before each test
@@ -25,6 +44,11 @@ describe('App', () => {
       isInitialized: false,
       // Story 2.3 state
       hoveredRef: null,
+      // Story 3.1 state
+      comments: [],
+      isLoadingComments: false,
+      loadCommentsError: null,
+      selectedRef: null,
     });
     // Reset fetch mock
     vi.restoreAllMocks();
@@ -93,5 +117,153 @@ describe('App', () => {
     // data-ref attributes should be preserved for future component interaction
     const container = screen.getByTestId('schematic-container');
     expect(container.querySelector('[data-ref="R1"]')).toBeInTheDocument();
+  });
+
+  describe('Comment Panel Integration (Story 3.1)', () => {
+    it('loads comments on app initialization', async () => {
+      // Mock SVG fetch
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if ((url as string).includes('schematic')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgContent),
+          } as Response);
+        }
+        // Mock comments fetch
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockComments),
+        } as Response);
+      });
+
+      render(<App />);
+
+      // Wait for comments to load
+      await waitFor(() => {
+        const state = useViewerStore.getState();
+        expect(state.comments).toHaveLength(2);
+      });
+    });
+
+    it('displays comment panel when no component is selected', async () => {
+      // Mock fetch to return both SVG and comments
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if ((url as string).includes('schematic')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgContent),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockComments),
+        } as Response);
+      });
+
+      render(<App />);
+
+      // Wait for app to initialize
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      // Comment panel should be visible
+      await waitFor(() => {
+        expect(screen.getByText('Comments')).toBeInTheDocument();
+      });
+    });
+
+    it('displays comments in the panel', async () => {
+      // Mock fetch
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if ((url as string).includes('schematic')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgContent),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockComments),
+        } as Response);
+      });
+
+      render(<App />);
+
+      // Wait for comments to appear
+      await waitFor(() => {
+        expect(screen.getByText('Alice')).toBeInTheDocument();
+        expect(screen.getByText('Bob')).toBeInTheDocument();
+      });
+    });
+
+    it('hides comment panel when component is selected', async () => {
+      // Mock fetch
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if ((url as string).includes('schematic')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgContent),
+          } as Response);
+        }
+        if ((url as string).includes('components')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([
+                { ref: 'R1', value: '10k', footprint: 'Resistor', posX: 100, posY: 100 },
+              ]),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockComments),
+        } as Response);
+      });
+
+      render(<App />);
+
+      // Wait for initialization
+      await waitFor(() => {
+        expect(screen.getByText('Comments')).toBeInTheDocument();
+      });
+
+      // Select a component - ComponentDetailPanel should replace CommentPanel
+      // We need to set both selectedRef AND componentIndex
+      const componentIndex = new Map([
+        ['R1', { ref: 'R1', value: '10k', footprint: 'Resistor', posX: 100, posY: 100 }],
+      ]);
+      act(() => {
+        useViewerStore.setState({ selectedRef: 'R1', componentIndex });
+      });
+
+      // Check that ComponentDetailPanel is shown (via its unique heading)
+      await waitFor(() => {
+        expect(screen.getByText('Component Details')).toBeInTheDocument();
+      });
+    });
+
+    it('shows empty state when no comments exist', async () => {
+      // Mock fetch to return empty comments
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if ((url as string).includes('schematic')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(mockSvgContent),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+      });
+
+      render(<App />);
+
+      // Wait for empty state message
+      await waitFor(() => {
+        expect(screen.getByText('No comments yet')).toBeInTheDocument();
+      });
+    });
   });
 });
