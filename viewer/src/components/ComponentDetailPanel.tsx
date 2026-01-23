@@ -1,8 +1,11 @@
+import { useCallback } from 'react';
+
 import type { Component } from '@/types';
 
 interface ComponentDetailPanelProps {
   component: Component;
   onClose: () => void;
+  onAddComment?: (componentRef: string) => void;
 }
 
 /**
@@ -12,7 +15,17 @@ interface ComponentDetailPanelProps {
  *
  * Story 2.4: Component Selection & Detail Panel
  */
-export function ComponentDetailPanel({ component, onClose }: ComponentDetailPanelProps) {
+export function ComponentDetailPanel({
+  component,
+  onClose,
+  onAddComment,
+}: ComponentDetailPanelProps) {
+  const handleAddComment = useCallback(() => {
+    if (onAddComment) {
+      onAddComment(component.ref);
+    }
+  }, [onAddComment, component.ref]);
+
   return (
     <div
       className="fixed z-50 bg-white shadow-lg border-gray-200 overflow-y-auto
@@ -77,6 +90,33 @@ export function ComponentDetailPanel({ component, onClose }: ComponentDetailPane
           </div>
         )}
       </dl>
+
+      {/* Add Comment button (Story 3.2) */}
+      {onAddComment && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <button
+            onClick={handleAddComment}
+            className="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2"
+            type="button"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
+            </svg>
+            Add Comment
+          </button>
+        </div>
+      )}
     </div>
   );
 }

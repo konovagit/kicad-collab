@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
+import { useAddComment } from '@/hooks/useAddComment';
 import { useComponentMapping } from '@/hooks/useComponentMapping';
 import { useComponentHover } from '@/hooks/useComponentHover';
 import { useComponentSelection } from '@/hooks/useComponentSelection';
@@ -7,9 +8,11 @@ import { usePanZoom } from '@/hooks/usePanZoom';
 import { useSchematic } from '@/hooks/useSchematic';
 import { useViewerStore } from '@/stores/viewerStore';
 
+import { AddCommentForm } from './AddCommentForm';
 import { CommentPanel } from './CommentPanel';
 import { ComponentDetailPanel } from './ComponentDetailPanel';
 import { ComponentTooltip } from './ComponentTooltip';
+import { ContextMenu } from './ContextMenu';
 
 /**
  * Main schematic viewer component.
@@ -64,6 +67,22 @@ export function SchematicViewer() {
 
   // Ref to the SVG container for DOM manipulation
   const svgContainerRef = useRef<HTMLDivElement>(null);
+
+  // Story 3.2: Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    componentRef: string;
+  } | null>(null);
+
+  // Story 3.2: Add comment modal state
+  const [addCommentModal, setAddCommentModal] = useState<{
+    isOpen: boolean;
+    componentRef: string;
+  } | null>(null);
+
+  // Story 3.2: Add comment hook
+  const { submitComment, isSubmitting } = useAddComment();
 
   // Story 2.3: Apply/remove .hovered class when hoveredRef changes
   useEffect(() => {
@@ -204,6 +223,52 @@ export function SchematicViewer() {
     clearHover();
   }, [handlePanZoomMouseLeave, clearHover]);
 
+  // Story 3.2: Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const target = e.target as Element;
+    const componentEl = target.closest('[data-ref]');
+
+    if (componentEl) {
+      e.preventDefault();
+      const ref = componentEl.getAttribute('data-ref');
+      if (ref) {
+        setContextMenu({
+          isOpen: true,
+          position: { x: e.clientX, y: e.clientY },
+          componentRef: ref,
+        });
+      }
+    }
+  }, []);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  // Story 3.2: Add comment modal handlers
+  const handleOpenAddCommentForm = useCallback((componentRef: string) => {
+    setAddCommentModal({
+      isOpen: true,
+      componentRef,
+    });
+    setContextMenu(null); // Close context menu if open
+  }, []);
+
+  const handleCloseAddCommentForm = useCallback(() => {
+    setAddCommentModal(null);
+  }, []);
+
+  const handleSubmitComment = useCallback(
+    async (content: string) => {
+      if (!addCommentModal) return;
+      const result = await submitComment(content, addCommentModal.componentRef);
+      if (result.ok) {
+        handleCloseAddCommentForm();
+      }
+    },
+    [addCommentModal, submitComment, handleCloseAddCommentForm]
+  );
+
   // Get hovered component data for tooltip
   const hoveredComponent = hoveredRef ? getComponent(hoveredRef) : null;
 
@@ -289,6 +354,7 @@ export function SchematicViewer() {
         onMouseOver={handleSvgMouseOver}
         onMouseOut={handleSvgMouseOut}
         onClick={handleSvgClick}
+        onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
       >
         {/* Transform wrapper - applies pan and zoom via CSS transform */}
@@ -315,7 +381,33 @@ export function SchematicViewer() {
 
       {/* Component detail panel (Story 2.4) - shown when component selected */}
       {selectedComponent && (
-        <ComponentDetailPanel component={selectedComponent} onClose={clearSelection} />
+        <ComponentDetailPanel
+          component={selectedComponent}
+          onClose={clearSelection}
+          onAddComment={handleOpenAddCommentForm}
+        />
+      )}
+
+      {/* Context menu (Story 3.2) */}
+      {contextMenu?.isOpen && (
+        <ContextMenu
+          position={contextMenu.position}
+          componentRef={contextMenu.componentRef}
+          onAddComment={() => handleOpenAddCommentForm(contextMenu.componentRef)}
+          onClose={handleCloseContextMenu}
+        />
+      )}
+
+      {/* Add comment modal (Story 3.2) */}
+      {addCommentModal?.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <AddCommentForm
+            componentRef={addCommentModal.componentRef}
+            onSubmit={handleSubmitComment}
+            onCancel={handleCloseAddCommentForm}
+            isSubmitting={isSubmitting}
+          />
+        </div>
       )}
 
       {/* Comment panel (Story 3.1) - shown when no component is selected */}

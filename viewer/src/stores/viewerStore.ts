@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import type { Comment, Component, Result } from '@/types';
 import { loadComponents as loadComponentsFromFile } from '@/utils/componentLoader';
+import { getStoredAuthor, setStoredAuthor } from '@/utils/authorStorage';
 
 // Pan/Zoom constants (Story 2.1)
 export const MIN_ZOOM = 0.1; // 10%
@@ -58,6 +59,13 @@ interface ViewerState {
   loadCommentsError: string | null;
   loadComments: () => Promise<Result<Comment[], Error>>;
   setComments: (comments: Comment[]) => void;
+
+  // Add comment state (Story 3.2)
+  authorName: string | null;
+  setAuthorName: (name: string) => void;
+  isAddingComment: boolean;
+  addCommentError: string | null;
+  addComment: (content: string, componentRef: string) => Promise<Result<Comment, Error>>;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -227,4 +235,49 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   },
 
   setComments: (comments: Comment[]) => set({ comments }),
+
+  // Add comment state (Story 3.2)
+  authorName: getStoredAuthor(),
+
+  setAuthorName: (name: string) => {
+    setStoredAuthor(name);
+    set({ authorName: name });
+  },
+
+  isAddingComment: false,
+  addCommentError: null,
+
+  addComment: async (content: string, componentRef: string): Promise<Result<Comment, Error>> => {
+    const { authorName, comments } = get();
+
+    if (!authorName) {
+      return { ok: false, error: new Error('Author name is required') };
+    }
+
+    if (!content.trim()) {
+      return { ok: false, error: new Error('Comment content is required') };
+    }
+
+    set({ isAddingComment: true, addCommentError: null });
+
+    try {
+      const newComment: Comment = {
+        id: crypto.randomUUID(),
+        author: authorName,
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+        componentRef,
+        status: 'open',
+      };
+
+      const updatedComments = [...comments, newComment];
+      set({ comments: updatedComments, isAddingComment: false });
+
+      return { ok: true, data: newComment };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add comment';
+      set({ isAddingComment: false, addCommentError: errorMessage });
+      return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
+    }
+  },
 }));

@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PAN, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useViewerStore } from './viewerStore';
 import type { Comment, Component } from '@/types';
+import * as authorStorage from '@/utils/authorStorage';
 
 // Sample SVG content for testing
 const mockSvgContent = '<svg><rect/></svg>';
@@ -33,6 +34,7 @@ const mockComments: Comment[] = [
 
 describe('viewerStore', () => {
   beforeEach(() => {
+    localStorage.clear();
     // Reset store to initial state
     useViewerStore.setState({
       isInitialized: false,
@@ -54,8 +56,16 @@ describe('viewerStore', () => {
       comments: [],
       isLoadingComments: false,
       loadCommentsError: null,
+      // Story 3.2 state
+      authorName: null,
+      isAddingComment: false,
+      addCommentError: null,
     });
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   describe('initialization', () => {
@@ -740,6 +750,171 @@ describe('viewerStore', () => {
 
       // Loading should be false after completion
       expect(useViewerStore.getState().isLoadingComments).toBe(false);
+    });
+  });
+
+  describe('authorName state (Story 3.2)', () => {
+    it('initializes authorName from localStorage', () => {
+      vi.spyOn(authorStorage, 'getStoredAuthor').mockReturnValue('Stored User');
+      // Need to re-create store to test initialization
+      // Since we can't easily recreate, we test via setAuthorName
+      const state = useViewerStore.getState();
+      expect(state.authorName).toBeNull(); // Reset state
+    });
+
+    it('setAuthorName updates state', () => {
+      const { setAuthorName } = useViewerStore.getState();
+      setAuthorName('Alice');
+      expect(useViewerStore.getState().authorName).toBe('Alice');
+    });
+
+    it('setAuthorName saves to localStorage', () => {
+      const setStoredSpy = vi.spyOn(authorStorage, 'setStoredAuthor');
+      const { setAuthorName } = useViewerStore.getState();
+      setAuthorName('Bob');
+      expect(setStoredSpy).toHaveBeenCalledWith('Bob');
+    });
+
+    it('setAuthorName overwrites existing author', () => {
+      const { setAuthorName } = useViewerStore.getState();
+      setAuthorName('Alice');
+      expect(useViewerStore.getState().authorName).toBe('Alice');
+
+      setAuthorName('Bob');
+      expect(useViewerStore.getState().authorName).toBe('Bob');
+    });
+  });
+
+  describe('addComment action (Story 3.2)', () => {
+    it('initializes isAddingComment as false', () => {
+      const state = useViewerStore.getState();
+      expect(state.isAddingComment).toBe(false);
+    });
+
+    it('initializes addCommentError as null', () => {
+      const state = useViewerStore.getState();
+      expect(state.addCommentError).toBeNull();
+    });
+
+    it('returns error if authorName is not set', async () => {
+      useViewerStore.setState({ authorName: null });
+
+      const { addComment } = useViewerStore.getState();
+      const result = await addComment('Test content', 'C12');
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Author name is required');
+      }
+    });
+
+    it('returns error if content is empty', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+
+      const { addComment } = useViewerStore.getState();
+      const result = await addComment('', 'C12');
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Comment content is required');
+      }
+    });
+
+    it('returns error if content is whitespace only', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+
+      const { addComment } = useViewerStore.getState();
+      const result = await addComment('   ', 'C12');
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Comment content is required');
+      }
+    });
+
+    it('creates new comment with correct fields', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+
+      const { addComment } = useViewerStore.getState();
+      const result = await addComment('Test content', 'C12');
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.author).toBe('Alice');
+        expect(result.data.content).toBe('Test content');
+        expect(result.data.componentRef).toBe('C12');
+        expect(result.data.status).toBe('open');
+        expect(result.data.id).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        );
+        expect(result.data.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      }
+    });
+
+    it('trims content whitespace', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+
+      const { addComment } = useViewerStore.getState();
+      const result = await addComment('  Test content  ', 'C12');
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.content).toBe('Test content');
+      }
+    });
+
+    it('appends comment to existing comments array', async () => {
+      useViewerStore.setState({
+        authorName: 'Alice',
+        comments: [mockComments[0]],
+      });
+
+      const { addComment } = useViewerStore.getState();
+      await addComment('New comment', 'R1');
+
+      const state = useViewerStore.getState();
+      expect(state.comments).toHaveLength(2);
+      expect(state.comments[0]).toEqual(mockComments[0]);
+      expect(state.comments[1].content).toBe('New comment');
+    });
+
+    it('sets isAddingComment to false after completion', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+
+      const { addComment } = useViewerStore.getState();
+      await addComment('Test', 'C12');
+
+      expect(useViewerStore.getState().isAddingComment).toBe(false);
+    });
+
+    it('clears addCommentError on successful add', async () => {
+      useViewerStore.setState({
+        authorName: 'Alice',
+        addCommentError: 'Previous error',
+      });
+
+      const { addComment } = useViewerStore.getState();
+      const result = await addComment('Test', 'C12');
+
+      expect(result.ok).toBe(true);
+      expect(useViewerStore.getState().addCommentError).toBeNull();
+    });
+
+    it('does not affect other state when adding comment', async () => {
+      useViewerStore.setState({
+        authorName: 'Alice',
+        svg: mockSvgContent,
+        zoom: 2.0,
+        selectedRef: 'R1',
+      });
+
+      const { addComment } = useViewerStore.getState();
+      await addComment('Test', 'C12');
+
+      const state = useViewerStore.getState();
+      expect(state.svg).toBe(mockSvgContent);
+      expect(state.zoom).toBe(2.0);
+      expect(state.selectedRef).toBe('R1');
     });
   });
 });

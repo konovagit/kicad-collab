@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PAN, DEFAULT_ZOOM, useViewerStore } from '@/stores/viewerStore';
 
@@ -37,6 +37,7 @@ function mockSuccessfulFetch(svgContent = mockSvgContent, components: object[] =
 
 describe('SchematicViewer', () => {
   beforeEach(() => {
+    localStorage.clear();
     // Reset store state before each test (including pan/zoom, components, hover, and selection)
     useViewerStore.setState({
       svg: null,
@@ -54,9 +55,21 @@ describe('SchematicViewer', () => {
       hoveredRef: null,
       // Story 2.4 state
       selectedRef: null,
+      // Story 3.1 state
+      comments: [],
+      isLoadingComments: false,
+      loadCommentsError: null,
+      // Story 3.2 state
+      authorName: 'Test User',
+      isAddingComment: false,
+      addCommentError: null,
     });
     // Reset fetch mock
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   it('displays loading state while fetching SVG', async () => {
@@ -896,6 +909,268 @@ describe('SchematicViewer', () => {
         const element = container.querySelector('[data-ref="R1"]');
         expect(element).toHaveClass('selected');
       });
+    });
+  });
+
+  describe('Context Menu and Add Comment (Story 3.2)', () => {
+    const mockComponents = [
+      { ref: 'R1', value: '10k', footprint: 'Resistor_SMD:R_0805', posX: 130, posY: 110 },
+      { ref: 'C1', value: '100nF', footprint: 'Capacitor_SMD:C_0805', posX: 255, posY: 110 },
+    ];
+
+    const mockSvgWithComponents = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+        <g data-ref="R1" data-value="10k"><rect x="100" y="100" width="60" height="20"/></g>
+        <g data-ref="C1" data-value="100nF"><rect x="200" y="100" width="60" height="20"/></g>
+      </svg>
+    `;
+
+    const mockComments = [
+      {
+        id: 'comment-001',
+        author: 'Alice',
+        content: 'Check value',
+        createdAt: '2026-01-23T10:00:00Z',
+        componentRef: 'C1',
+        status: 'open',
+      },
+    ];
+
+    beforeEach(() => {
+      localStorage.clear();
+      useViewerStore.setState({
+        svg: null,
+        isLoadingSvg: false,
+        loadError: null,
+        isInitialized: false,
+        zoom: DEFAULT_ZOOM,
+        pan: DEFAULT_PAN,
+        components: [],
+        componentIndex: new Map(),
+        isLoadingComponents: false,
+        loadComponentsError: null,
+        hoveredRef: null,
+        selectedRef: null,
+        comments: [],
+        isLoadingComments: false,
+        loadCommentsError: null,
+        authorName: 'Test User',
+        isAddingComment: false,
+        addCommentError: null,
+      });
+    });
+
+    // Helper to mock all fetch calls
+    function mockAllFetches(
+      svgContent = mockSvgWithComponents,
+      components = mockComponents,
+      comments = mockComments
+    ) {
+      vi.spyOn(global, 'fetch').mockImplementation((url) => {
+        if (String(url).includes('sample-schematic.svg')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(svgContent),
+          } as Response);
+        }
+        if (String(url).includes('components.json')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(components),
+          } as Response);
+        }
+        if (String(url).includes('comments.json')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(comments),
+          } as Response);
+        }
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      });
+    }
+
+    it('shows context menu on right-click on component', async () => {
+      mockAllFetches();
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Right-click on component
+      fireEvent.contextMenu(r1Element!, { clientX: 150, clientY: 120 });
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('menuitem', { name: /add comment/i })).toBeInTheDocument();
+    });
+
+    it('does not show context menu on right-click on empty space', async () => {
+      mockAllFetches();
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      const container = screen.getByTestId('schematic-container');
+
+      // Right-click on container (empty space)
+      fireEvent.contextMenu(container, { clientX: 400, clientY: 400 });
+
+      // Context menu should not appear
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('opens add comment form when clicking Add Comment in context menu', async () => {
+      const user = userEvent.setup();
+      mockAllFetches();
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Right-click on component
+      fireEvent.contextMenu(r1Element!, { clientX: 150, clientY: 120 });
+
+      // Click Add Comment
+      await user.click(screen.getByRole('menuitem', { name: /add comment/i }));
+
+      // Add comment form should appear
+      await waitFor(() => {
+        expect(screen.getByText(/commenting on/i)).toBeInTheDocument();
+        expect(screen.getByText('R1')).toBeInTheDocument();
+      });
+    });
+
+    it('opens add comment form from detail panel Add Comment button', async () => {
+      const user = userEvent.setup();
+      mockAllFetches();
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Click to select component
+      fireEvent.click(r1Element!);
+
+      // Wait for detail panel
+      await waitFor(() => {
+        expect(screen.getByText('Component Details')).toBeInTheDocument();
+      });
+
+      // Click Add Comment in detail panel
+      await user.click(screen.getByRole('button', { name: /add comment/i }));
+
+      // Add comment form should appear
+      await waitFor(() => {
+        expect(screen.getByText(/commenting on/i)).toBeInTheDocument();
+      });
+    });
+
+    it('closes add comment form on Cancel', async () => {
+      const user = userEvent.setup();
+      mockAllFetches();
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Open context menu and add comment form
+      fireEvent.contextMenu(r1Element!, { clientX: 150, clientY: 120 });
+      await user.click(screen.getByRole('menuitem', { name: /add comment/i }));
+
+      // Verify form is open
+      await waitFor(() => {
+        expect(screen.getByText(/commenting on/i)).toBeInTheDocument();
+      });
+
+      // Click Cancel
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Form should be closed
+      await waitFor(() => {
+        expect(screen.queryByText(/commenting on/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('adds comment and closes form on submit', async () => {
+      const user = userEvent.setup();
+      mockAllFetches();
+
+      render(<SchematicViewer />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('schematic-container')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        expect(useViewerStore.getState().componentIndex.size).toBe(2);
+      });
+
+      const container = screen.getByTestId('schematic-container');
+      const r1Element = container.querySelector('[data-ref="R1"]');
+
+      // Open add comment form
+      fireEvent.contextMenu(r1Element!, { clientX: 150, clientY: 120 });
+      await user.click(screen.getByRole('menuitem', { name: /add comment/i }));
+
+      // Type comment
+      await user.type(screen.getByPlaceholderText(/write your comment/i), 'New test comment');
+
+      // Submit
+      await user.click(screen.getByRole('button', { name: /add comment/i }));
+
+      // Form should close
+      await waitFor(() => {
+        expect(screen.queryByText(/commenting on/i)).not.toBeInTheDocument();
+      });
+
+      // Comment should be added to store
+      const comments = useViewerStore.getState().comments;
+      const newComment = comments.find((c) => c.content === 'New test comment');
+      expect(newComment).toBeDefined();
+      expect(newComment?.componentRef).toBe('R1');
+      expect(newComment?.author).toBe('Test User');
     });
   });
 });

@@ -107,4 +107,54 @@ describe('ComponentDetailPanel', () => {
       expect(panel).toHaveClass('right-0');
     });
   });
+
+  describe('Add Comment button (Story 3.2)', () => {
+    it('displays Add Comment button when onAddComment is provided', () => {
+      render(
+        <ComponentDetailPanel component={fullComponent} onClose={vi.fn()} onAddComment={vi.fn()} />
+      );
+      expect(screen.getByRole('button', { name: /add comment/i })).toBeInTheDocument();
+    });
+
+    it('does not display Add Comment button when onAddComment is not provided', () => {
+      render(<ComponentDetailPanel component={fullComponent} onClose={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /add comment/i })).not.toBeInTheDocument();
+    });
+
+    it('calls onAddComment with component ref when clicked', async () => {
+      const user = userEvent.setup();
+      const onAddComment = vi.fn();
+      render(
+        <ComponentDetailPanel
+          component={fullComponent}
+          onClose={vi.fn()}
+          onAddComment={onAddComment}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /add comment/i }));
+      expect(onAddComment).toHaveBeenCalledWith('C12');
+    });
+
+    it('Add Comment button is at the bottom of the panel', () => {
+      render(
+        <ComponentDetailPanel component={fullComponent} onClose={vi.fn()} onAddComment={vi.fn()} />
+      );
+
+      // Button should be in a container with margin-top for separation
+      const button = screen.getByRole('button', { name: /add comment/i });
+      const buttonContainer = button.parentElement;
+      expect(buttonContainer).toHaveClass('mt-6');
+      expect(buttonContainer).toHaveClass('border-t');
+    });
+
+    it('Add Comment button has full width styling', () => {
+      render(
+        <ComponentDetailPanel component={fullComponent} onClose={vi.fn()} onAddComment={vi.fn()} />
+      );
+
+      const button = screen.getByRole('button', { name: /add comment/i });
+      expect(button).toHaveClass('w-full');
+    });
+  });
 });
