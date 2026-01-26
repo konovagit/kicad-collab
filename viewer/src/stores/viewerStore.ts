@@ -66,6 +66,17 @@ interface ViewerState {
   isAddingComment: boolean;
   addCommentError: string | null;
   addComment: (content: string, componentRef: string) => Promise<Result<Comment, Error>>;
+
+  // Add general comment action (Story 3.3)
+  addGeneralComment: (content: string) => Promise<Result<Comment, Error>>;
+
+  // Comment status actions (Story 3.4)
+  resolveComment: (id: string) => void;
+  reopenComment: (id: string) => void;
+
+  // Comment filter state (Story 3.4)
+  commentFilter: 'all' | 'open' | 'resolved';
+  setCommentFilter: (filter: 'all' | 'open' | 'resolved') => void;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -280,4 +291,86 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
     }
   },
+
+  // Add general comment action (Story 3.3)
+  addGeneralComment: async (content: string): Promise<Result<Comment, Error>> => {
+    const { authorName, comments } = get();
+
+    if (!authorName) {
+      return { ok: false, error: new Error('Author name is required') };
+    }
+
+    if (!content.trim()) {
+      return { ok: false, error: new Error('Comment content is required') };
+    }
+
+    set({ isAddingComment: true, addCommentError: null });
+
+    try {
+      const newComment: Comment = {
+        id: crypto.randomUUID(),
+        author: authorName,
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+        status: 'open',
+        // NOTE: No componentRef field for general comments!
+      };
+
+      const updatedComments = [...comments, newComment];
+      set({ comments: updatedComments, isAddingComment: false });
+
+      return { ok: true, data: newComment };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add comment';
+      set({ isAddingComment: false, addCommentError: errorMessage });
+      return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
+    }
+  },
+
+  // Comment status actions (Story 3.4)
+  resolveComment: (id: string) => {
+    set((state) => ({
+      comments: state.comments.map((comment) =>
+        comment.id === id
+          ? { ...comment, status: 'resolved' as const, updatedAt: new Date().toISOString() }
+          : comment
+      ),
+    }));
+  },
+
+  reopenComment: (id: string) => {
+    set((state) => ({
+      comments: state.comments.map((comment) =>
+        comment.id === id
+          ? { ...comment, status: 'open' as const, updatedAt: new Date().toISOString() }
+          : comment
+      ),
+    }));
+  },
+
+  // Comment filter state (Story 3.4)
+  commentFilter: 'all',
+  setCommentFilter: (filter: 'all' | 'open' | 'resolved') => {
+    set({ commentFilter: filter });
+  },
 }));
+
+// Computed selectors (Story 3.4)
+export function selectFilteredComments(state: ViewerState): Comment[] {
+  const { comments, commentFilter } = state;
+  if (commentFilter === 'all') return comments;
+  return comments.filter((c) => c.status === commentFilter);
+}
+
+export function selectCommentCounts(state: ViewerState): {
+  total: number;
+  open: number;
+  resolved: number;
+} {
+  const { comments } = state;
+  return {
+    total: comments.length,
+    open: comments.filter((c) => c.status === 'open').length,
+    resolved: comments.filter((c) => c.status === 'resolved').length,
+  };
+}

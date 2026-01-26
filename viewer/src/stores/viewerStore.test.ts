@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_PAN, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, useViewerStore } from './viewerStore';
+import {
+  DEFAULT_PAN,
+  DEFAULT_ZOOM,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  useViewerStore,
+  selectFilteredComments,
+  selectCommentCounts,
+} from './viewerStore';
 import type { Comment, Component } from '@/types';
 import * as authorStorage from '@/utils/authorStorage';
 
@@ -60,6 +68,8 @@ describe('viewerStore', () => {
       authorName: null,
       isAddingComment: false,
       addCommentError: null,
+      // Story 3.4 state
+      commentFilter: 'all',
     });
     vi.restoreAllMocks();
   });
@@ -782,6 +792,321 @@ describe('viewerStore', () => {
 
       setAuthorName('Bob');
       expect(useViewerStore.getState().authorName).toBe('Bob');
+    });
+  });
+
+  describe('addGeneralComment action (Story 3.3)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [],
+        authorName: null,
+        isAddingComment: false,
+        addCommentError: null,
+      });
+    });
+
+    it('creates comment WITHOUT componentRef field', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+      const { addGeneralComment } = useViewerStore.getState();
+      const result = await addGeneralComment('General feedback');
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.componentRef).toBeUndefined();
+        expect(result.data.content).toBe('General feedback');
+        expect(result.data.author).toBe('Alice');
+        expect(result.data.status).toBe('open');
+      }
+    });
+
+    it('returns error if no author name set', async () => {
+      useViewerStore.setState({ authorName: null });
+      const { addGeneralComment } = useViewerStore.getState();
+      const result = await addGeneralComment('Test');
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Author name is required');
+      }
+    });
+
+    it('returns error if content is empty', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+      const { addGeneralComment } = useViewerStore.getState();
+      const result = await addGeneralComment('   ');
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Comment content is required');
+      }
+    });
+
+    it('appends to existing comments array', async () => {
+      useViewerStore.setState({
+        authorName: 'Alice',
+        comments: [
+          {
+            id: 'existing',
+            author: 'Bob',
+            content: 'Existing',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+        ],
+      });
+
+      const { addGeneralComment } = useViewerStore.getState();
+      await addGeneralComment('New general comment');
+
+      expect(useViewerStore.getState().comments).toHaveLength(2);
+    });
+
+    it('generates valid UUID for id', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+      const { addGeneralComment } = useViewerStore.getState();
+      const result = await addGeneralComment('Test');
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.id).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        );
+      }
+    });
+
+    it('generates ISO 8601 timestamp for createdAt', async () => {
+      useViewerStore.setState({ authorName: 'Alice' });
+      const { addGeneralComment } = useViewerStore.getState();
+      const result = await addGeneralComment('Test');
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(() => new Date(result.data.createdAt)).not.toThrow();
+        expect(result.data.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      }
+    });
+  });
+
+  describe('commentFilter state (Story 3.4)', () => {
+    it('initializes commentFilter as "all"', () => {
+      const state = useViewerStore.getState();
+      expect(state.commentFilter).toBe('all');
+    });
+
+    it('setCommentFilter changes filter to "open"', () => {
+      const { setCommentFilter } = useViewerStore.getState();
+      setCommentFilter('open');
+      expect(useViewerStore.getState().commentFilter).toBe('open');
+    });
+
+    it('setCommentFilter changes filter to "resolved"', () => {
+      const { setCommentFilter } = useViewerStore.getState();
+      setCommentFilter('resolved');
+      expect(useViewerStore.getState().commentFilter).toBe('resolved');
+    });
+
+    it('setCommentFilter changes filter back to "all"', () => {
+      const { setCommentFilter } = useViewerStore.getState();
+      setCommentFilter('resolved');
+      setCommentFilter('all');
+      expect(useViewerStore.getState().commentFilter).toBe('all');
+    });
+  });
+
+  describe('selectFilteredComments selector (Story 3.4)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'Alice',
+            content: 'Open 1',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: '2',
+            author: 'Bob',
+            content: 'Resolved',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'resolved',
+          },
+          {
+            id: '3',
+            author: 'Carol',
+            content: 'Open 2',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+        ],
+        commentFilter: 'all',
+      });
+    });
+
+    it('returns all comments when filter is "all"', () => {
+      const filtered = selectFilteredComments(useViewerStore.getState());
+      expect(filtered).toHaveLength(3);
+    });
+
+    it('returns only open comments when filter is "open"', () => {
+      useViewerStore.getState().setCommentFilter('open');
+      const filtered = selectFilteredComments(useViewerStore.getState());
+      expect(filtered).toHaveLength(2);
+      expect(filtered.every((c) => c.status === 'open')).toBe(true);
+    });
+
+    it('returns only resolved comments when filter is "resolved"', () => {
+      useViewerStore.getState().setCommentFilter('resolved');
+      const filtered = selectFilteredComments(useViewerStore.getState());
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].status).toBe('resolved');
+    });
+  });
+
+  describe('selectCommentCounts selector (Story 3.4)', () => {
+    it('returns correct counts for open and resolved', () => {
+      useViewerStore.setState({
+        comments: [
+          { id: '1', author: 'A', content: 'a', createdAt: '2026-01-01T00:00:00Z', status: 'open' },
+          {
+            id: '2',
+            author: 'B',
+            content: 'b',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'resolved',
+          },
+          { id: '3', author: 'C', content: 'c', createdAt: '2026-01-01T00:00:00Z', status: 'open' },
+        ],
+      });
+      const counts = selectCommentCounts(useViewerStore.getState());
+      expect(counts).toEqual({ total: 3, open: 2, resolved: 1 });
+    });
+
+    it('returns zeros for empty comment list', () => {
+      useViewerStore.setState({ comments: [] });
+      const counts = selectCommentCounts(useViewerStore.getState());
+      expect(counts).toEqual({ total: 0, open: 0, resolved: 0 });
+    });
+
+    it('counts all as open when no resolved comments', () => {
+      useViewerStore.setState({
+        comments: [
+          { id: '1', author: 'A', content: 'a', createdAt: '2026-01-01T00:00:00Z', status: 'open' },
+          { id: '2', author: 'B', content: 'b', createdAt: '2026-01-01T00:00:00Z', status: 'open' },
+        ],
+      });
+      const counts = selectCommentCounts(useViewerStore.getState());
+      expect(counts).toEqual({ total: 2, open: 2, resolved: 0 });
+    });
+  });
+
+  describe('resolveComment action (Story 3.4)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'Alice',
+            content: 'Test comment',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+        ],
+      });
+    });
+
+    it('changes comment status to resolved', () => {
+      useViewerStore.getState().resolveComment('1');
+      expect(useViewerStore.getState().comments[0].status).toBe('resolved');
+    });
+
+    it('sets updatedAt timestamp', () => {
+      const before = new Date().toISOString();
+      useViewerStore.getState().resolveComment('1');
+      const after = new Date().toISOString();
+      const updatedAt = useViewerStore.getState().comments[0].updatedAt!;
+      expect(updatedAt >= before).toBe(true);
+      expect(updatedAt <= after).toBe(true);
+    });
+
+    it('does not affect other comments', () => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'Alice',
+            content: 'Test 1',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: '2',
+            author: 'Bob',
+            content: 'Test 2',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+        ],
+      });
+      useViewerStore.getState().resolveComment('1');
+      expect(useViewerStore.getState().comments[1].status).toBe('open');
+    });
+
+    it('handles non-existent comment id gracefully', () => {
+      expect(() => useViewerStore.getState().resolveComment('nonexistent')).not.toThrow();
+    });
+  });
+
+  describe('reopenComment action (Story 3.4)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'Alice',
+            content: 'Test comment',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'resolved',
+          },
+        ],
+      });
+    });
+
+    it('changes comment status to open', () => {
+      useViewerStore.getState().reopenComment('1');
+      expect(useViewerStore.getState().comments[0].status).toBe('open');
+    });
+
+    it('sets updatedAt timestamp', () => {
+      useViewerStore.getState().reopenComment('1');
+      expect(useViewerStore.getState().comments[0].updatedAt).toBeDefined();
+    });
+
+    it('does not affect other comments', () => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'Alice',
+            content: 'Test 1',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'resolved',
+          },
+          {
+            id: '2',
+            author: 'Bob',
+            content: 'Test 2',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'resolved',
+          },
+        ],
+      });
+      useViewerStore.getState().reopenComment('1');
+      expect(useViewerStore.getState().comments[1].status).toBe('resolved');
+    });
+
+    it('handles non-existent comment id gracefully', () => {
+      expect(() => useViewerStore.getState().reopenComment('nonexistent')).not.toThrow();
     });
   });
 

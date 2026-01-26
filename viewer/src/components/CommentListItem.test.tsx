@@ -106,4 +106,138 @@ describe('CommentListItem', () => {
     // Root element should not have cursor-pointer class
     expect(container.firstChild).not.toHaveClass('cursor-pointer');
   });
+
+  describe('resolve/reopen buttons (Story 3.4)', () => {
+    const mockOnResolve = vi.fn();
+    const mockOnReopen = vi.fn();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('shows Resolve button for open comments', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      expect(screen.getByRole('button', { name: /resolve/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /reopen/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Reopen button for resolved comments', () => {
+      const resolvedComment = { ...mockAnchoredComment, status: 'resolved' as const };
+      render(
+        <CommentListItem
+          comment={resolvedComment}
+          onCommentClick={vi.fn()}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      expect(screen.getByRole('button', { name: /reopen/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /resolve/i })).not.toBeInTheDocument();
+    });
+
+    it('calls onResolve with comment id when Resolve clicked', async () => {
+      // Use real timers for user interaction
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /resolve/i }));
+      expect(mockOnResolve).toHaveBeenCalledWith('comment-001');
+    });
+
+    it('calls onReopen with comment id when Reopen clicked', async () => {
+      // Use real timers for user interaction
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      const resolvedComment = { ...mockAnchoredComment, status: 'resolved' as const };
+      render(
+        <CommentListItem
+          comment={resolvedComment}
+          onCommentClick={vi.fn()}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /reopen/i }));
+      expect(mockOnReopen).toHaveBeenCalledWith('comment-001');
+    });
+
+    it('does not trigger onCommentClick when Resolve button is clicked', async () => {
+      // Use real timers for user interaction
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      const onCommentClick = vi.fn();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={onCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /resolve/i }));
+      expect(onCommentClick).not.toHaveBeenCalled();
+    });
+
+    it('does not trigger onCommentClick when Reopen button is clicked', async () => {
+      // Use real timers for user interaction
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      const onCommentClick = vi.fn();
+      const resolvedComment = { ...mockAnchoredComment, status: 'resolved' as const };
+      render(
+        <CommentListItem
+          comment={resolvedComment}
+          onCommentClick={onCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /reopen/i }));
+      expect(onCommentClick).not.toHaveBeenCalled();
+    });
+
+    it('applies reduced opacity to resolved comments', () => {
+      const resolvedComment = { ...mockAnchoredComment, status: 'resolved' as const };
+      const { container } = render(
+        <CommentListItem
+          comment={resolvedComment}
+          onCommentClick={vi.fn()}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      expect(container.firstChild).toHaveClass('opacity-60');
+    });
+
+    it('applies strikethrough to resolved comment content', () => {
+      const resolvedComment = {
+        ...mockAnchoredComment,
+        status: 'resolved' as const,
+        content: 'Test content for strikethrough',
+      };
+      render(
+        <CommentListItem
+          comment={resolvedComment}
+          onCommentClick={vi.fn()}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      expect(screen.getByText('Test content for strikethrough')).toHaveClass('line-through');
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
@@ -45,6 +45,7 @@ describe('CommentPanel', () => {
       isLoadingComments: false,
       loadCommentsError: null,
       selectedRef: null,
+      commentFilter: 'all',
     });
   });
 
@@ -152,5 +153,190 @@ describe('CommentPanel', () => {
     render(<CommentPanel />);
 
     expect(screen.getByText(/📝 General/)).toBeInTheDocument();
+  });
+
+  describe('Add General Comment button (Story 3.3)', () => {
+    it('renders Add Comment button in header', () => {
+      render(<CommentPanel />);
+      expect(screen.getByRole('button', { name: /add.*comment/i })).toBeInTheDocument();
+    });
+
+    it('opens GeneralCommentForm when button clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(<CommentPanel />);
+      await user.click(screen.getByRole('button', { name: /add.*comment/i }));
+      expect(screen.getByText(/not attached to any component/i)).toBeInTheDocument();
+    });
+
+    it('closes form when Cancel clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(<CommentPanel />);
+      await user.click(screen.getByRole('button', { name: /add.*comment/i }));
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByText(/not attached to any component/i)).not.toBeInTheDocument();
+    });
+
+    it('adds general comment to list on submit', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({ authorName: 'Alice', comments: [] });
+
+      render(<CommentPanel />);
+      await user.click(screen.getByRole('button', { name: /add.*comment/i }));
+      await user.type(screen.getByPlaceholderText(/general comment/i), 'Overall looks good');
+
+      // Click the submit button (inside the modal, which is "Add Comment")
+      const submitButtons = screen.getAllByRole('button', { name: /add comment/i });
+      await user.click(submitButtons[submitButtons.length - 1]); // The last one is the submit button
+
+      // Wait for comment to appear in list
+      await waitFor(() => {
+        expect(screen.getByText('Overall looks good')).toBeInTheDocument();
+      });
+    });
+
+    it('closes form after successful submit', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({ authorName: 'Alice', comments: [] });
+
+      render(<CommentPanel />);
+      await user.click(screen.getByRole('button', { name: /add.*comment/i }));
+      await user.type(screen.getByPlaceholderText(/general comment/i), 'Feedback');
+
+      const submitButtons = screen.getAllByRole('button', { name: /add comment/i });
+      await user.click(submitButtons[submitButtons.length - 1]);
+
+      await waitFor(() => {
+        expect(screen.queryByText(/not attached to any component/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('has accessible aria-label on button', () => {
+      render(<CommentPanel />);
+      expect(screen.getByRole('button', { name: /add.*comment/i })).toHaveAccessibleName();
+    });
+
+    it('closes form when clicking modal backdrop', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(<CommentPanel />);
+      await user.click(screen.getByRole('button', { name: /add.*comment/i }));
+
+      // Find the backdrop (the outer div with bg-black class)
+      const backdrop = screen.getByText(/not attached to any component/i).closest('.fixed.inset-0');
+      // Click on the backdrop itself (not the form)
+      await user.click(backdrop as Element);
+
+      expect(screen.queryByText(/not attached to any component/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Comment filtering (Story 3.4)', () => {
+    const mixedComments: Comment[] = [
+      {
+        id: 'c1',
+        author: 'Alice',
+        content: 'Open comment 1',
+        createdAt: '2026-01-23T09:00:00Z',
+        status: 'open',
+      },
+      {
+        id: 'c2',
+        author: 'Bob',
+        content: 'Resolved comment',
+        createdAt: '2026-01-23T10:00:00Z',
+        status: 'resolved',
+      },
+      {
+        id: 'c3',
+        author: 'Carol',
+        content: 'Open comment 2',
+        createdAt: '2026-01-23T11:00:00Z',
+        status: 'open',
+      },
+    ];
+
+    it('displays filter dropdown in header', () => {
+      useViewerStore.setState({ comments: mixedComments });
+      render(<CommentPanel />);
+      expect(screen.getByRole('button', { name: /all/i })).toBeInTheDocument();
+    });
+
+    it('displays comment counts in header', () => {
+      useViewerStore.setState({ comments: mixedComments });
+      render(<CommentPanel />);
+      expect(screen.getByText(/2 open/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 resolved/i)).toBeInTheDocument();
+    });
+
+    it('filters comments when Open filter is selected', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({ comments: mixedComments });
+      render(<CommentPanel />);
+
+      // Click filter dropdown
+      await user.click(screen.getByRole('button', { name: /all/i }));
+      // Select Open filter
+      await user.click(screen.getByRole('option', { name: /open/i }));
+
+      // Should show only open comments
+      expect(screen.getByText('Open comment 1')).toBeInTheDocument();
+      expect(screen.getByText('Open comment 2')).toBeInTheDocument();
+      expect(screen.queryByText('Resolved comment')).not.toBeInTheDocument();
+    });
+
+    it('filters comments when Resolved filter is selected', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({ comments: mixedComments });
+      render(<CommentPanel />);
+
+      // Click filter dropdown
+      await user.click(screen.getByRole('button', { name: /all/i }));
+      // Select Resolved filter
+      await user.click(screen.getByRole('option', { name: /resolved/i }));
+
+      // Should show only resolved comments
+      expect(screen.getByText('Resolved comment')).toBeInTheDocument();
+      expect(screen.queryByText('Open comment 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Open comment 2')).not.toBeInTheDocument();
+    });
+
+    it('shows all comments when All filter is selected', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({ comments: mixedComments, commentFilter: 'open' });
+      render(<CommentPanel />);
+
+      // Filter should currently be "Open"
+      expect(screen.getByRole('button', { name: /open/i })).toBeInTheDocument();
+
+      // Click filter dropdown and select All
+      await user.click(screen.getByRole('button', { name: /open/i }));
+      await user.click(screen.getByRole('option', { name: /all/i }));
+
+      // Should show all comments
+      expect(screen.getByText('Open comment 1')).toBeInTheDocument();
+      expect(screen.getByText('Open comment 2')).toBeInTheDocument();
+      expect(screen.getByText('Resolved comment')).toBeInTheDocument();
+    });
+
+    it('displays Resolve button for open comments', () => {
+      useViewerStore.setState({ comments: mixedComments });
+      render(<CommentPanel />);
+      // Should have 2 Resolve buttons (for 2 open comments)
+      const resolveButtons = screen.getAllByRole('button', { name: /resolve/i });
+      expect(resolveButtons).toHaveLength(2);
+    });
+
+    it('displays Reopen button for resolved comments', () => {
+      useViewerStore.setState({ comments: mixedComments });
+      render(<CommentPanel />);
+      expect(screen.getByRole('button', { name: /reopen/i })).toBeInTheDocument();
+    });
   });
 });
