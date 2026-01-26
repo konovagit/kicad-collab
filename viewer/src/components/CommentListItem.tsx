@@ -10,6 +10,9 @@ interface CommentListItemProps {
   onResolve?: (id: string) => void;
   onReopen?: (id: string) => void;
   onReply?: () => void; // Story 3.5: Threading support
+  onEdit?: () => void; // Story 3.6: Edit own comments
+  onDelete?: () => void; // Story 3.6: Delete own comments
+  currentUserName?: string; // Story 3.6: For author check
 }
 
 /**
@@ -29,9 +32,14 @@ export const CommentListItem = memo(function CommentListItem({
   onResolve,
   onReopen,
   onReply,
+  onEdit,
+  onDelete,
+  currentUserName,
 }: CommentListItemProps) {
   const isAnchored = Boolean(comment.componentRef);
   const isResolved = comment.status === 'resolved';
+  const isOwnComment = currentUserName && currentUserName === comment.author;
+  const hasBeenEdited = Boolean(comment.updatedAt);
 
   const handleClick = useCallback(() => {
     if (isAnchored && !isResolved) {
@@ -63,6 +71,22 @@ export const CommentListItem = memo(function CommentListItem({
     [onReply]
   );
 
+  const handleEdit = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onEdit?.();
+    },
+    [onEdit]
+  );
+
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDelete?.();
+    },
+    [onDelete]
+  );
+
   return (
     <div
       className={`p-3 rounded-lg border border-gray-200 ${isResolved ? 'opacity-60' : ''} ${
@@ -76,7 +100,10 @@ export const CommentListItem = memo(function CommentListItem({
           <span className="font-medium text-sm">{comment.author}</span>
           <CommentStatusBadge status={comment.status} />
         </div>
-        <span className="text-xs text-gray-400">{formatRelativeTime(comment.createdAt)}</span>
+        <span className="text-xs text-gray-400">
+          {formatRelativeTime(comment.createdAt)}
+          {hasBeenEdited && <span className="ml-1">(edited)</span>}
+        </span>
       </div>
 
       {/* Anchor indicator */}
@@ -118,6 +145,25 @@ export const CommentListItem = memo(function CommentListItem({
               </button>
             )}
           </>
+        )}
+        {/* Edit/Delete always available for own comments, regardless of status */}
+        {isOwnComment && onEdit && (
+          <button
+            onClick={handleEdit}
+            className="text-xs text-gray-600 hover:text-gray-800"
+            aria-label={`Edit comment by ${comment.author}`}
+          >
+            Edit
+          </button>
+        )}
+        {isOwnComment && onDelete && (
+          <button
+            onClick={handleDelete}
+            className="text-xs text-red-600 hover:text-red-800"
+            aria-label={`Delete comment by ${comment.author}`}
+          >
+            Delete
+          </button>
         )}
       </div>
     </div>

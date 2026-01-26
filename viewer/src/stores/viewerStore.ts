@@ -80,6 +80,16 @@ interface ViewerState {
 
   // Add reply action (Story 3.5)
   addReply: (parentId: string, content: string) => Promise<Result<Comment, Error>>;
+
+  // Edit/Delete comment state (Story 3.6)
+  isEditingComment: boolean;
+  editCommentError: string | null;
+  isDeletingComment: boolean;
+  deleteCommentError: string | null;
+
+  // Edit/Delete comment actions (Story 3.6)
+  editComment: (id: string, newContent: string) => Result<Comment, Error>;
+  deleteComment: (id: string) => Result<void, Error>;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -397,6 +407,82 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to add reply';
       set({ isAddingComment: false, addCommentError: errorMessage });
+      return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
+    }
+  },
+
+  // Edit/Delete comment state (Story 3.6)
+  isEditingComment: false,
+  editCommentError: null,
+  isDeletingComment: false,
+  deleteCommentError: null,
+
+  // Edit comment action (Story 3.6)
+  editComment: (id: string, newContent: string): Result<Comment, Error> => {
+    if (!newContent.trim()) {
+      return { ok: false, error: new Error('Comment content is required') };
+    }
+
+    const { comments } = get();
+    const commentIndex = comments.findIndex((c) => c.id === id);
+
+    if (commentIndex === -1) {
+      return { ok: false, error: new Error('Comment not found') };
+    }
+
+    set({ isEditingComment: true, editCommentError: null });
+
+    try {
+      const updatedComment: Comment = {
+        ...comments[commentIndex],
+        content: newContent.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedComments = [...comments];
+      updatedComments[commentIndex] = updatedComment;
+
+      set({ comments: updatedComments, isEditingComment: false });
+      return { ok: true, data: updatedComment };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to edit comment';
+      set({ isEditingComment: false, editCommentError: errorMessage });
+      return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
+    }
+  },
+
+  // Delete comment action (Story 3.6)
+  deleteComment: (id: string): Result<void, Error> => {
+    const { comments } = get();
+    const comment = comments.find((c) => c.id === id);
+
+    if (!comment) {
+      return { ok: false, error: new Error('Comment not found') };
+    }
+
+    set({ isDeletingComment: true, deleteCommentError: null });
+
+    try {
+      // If deleting a root comment (no parentId), also delete all replies
+      const isRootComment = !comment.parentId;
+      const idsToDelete = new Set<string>([id]);
+
+      if (isRootComment) {
+        // Find all replies to this root comment
+        comments.forEach((c) => {
+          if (c.parentId === id) {
+            idsToDelete.add(c.id);
+          }
+        });
+      }
+
+      const updatedComments = comments.filter((c) => !idsToDelete.has(c.id));
+      set({ comments: updatedComments, isDeletingComment: false });
+
+      return { ok: true, data: undefined };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete comment';
+      set({ isDeletingComment: false, deleteCommentError: errorMessage });
       return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
     }
   },

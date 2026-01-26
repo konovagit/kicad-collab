@@ -228,4 +228,222 @@ describe('CommentThread', () => {
     // No reply content
     expect(screen.queryByText('First reply')).not.toBeInTheDocument();
   });
+
+  describe('edit/delete functionality (Story 3.6)', () => {
+    it('shows Edit button for own comments', () => {
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice', // Same as comment author
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      expect(screen.getByRole('button', { name: /edit comment/i })).toBeInTheDocument();
+    });
+
+    it('shows Delete button for own comments', () => {
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+      expect(screen.getByRole('button', { name: /delete comment/i })).toBeInTheDocument();
+    });
+
+    it('shows EditCommentForm when Edit is clicked on parent comment', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /edit comment/i }));
+
+      // EditCommentForm should now be visible with textarea
+      expect(screen.getByRole('textbox', { name: /edit comment content/i })).toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toHaveValue('This is the parent comment');
+    });
+
+    it('hides EditCommentForm and restores comment when Cancel is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      // Enter edit mode
+      await user.click(screen.getByRole('button', { name: /edit comment/i }));
+      expect(screen.getByRole('textbox')).toBeInTheDocument();
+
+      // Cancel edit
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Should show original comment again
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      expect(screen.getByText('This is the parent comment')).toBeInTheDocument();
+    });
+
+    it('updates comment content in store when edit is saved', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      // Enter edit mode
+      await user.click(screen.getByRole('button', { name: /edit comment/i }));
+
+      // Change content
+      const textarea = screen.getByRole('textbox');
+      await user.clear(textarea);
+      await user.type(textarea, 'Updated parent comment');
+
+      // Save
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      // Edit form should close (no textbox)
+      await waitFor(() => {
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      });
+
+      // Store should have updated content
+      const updatedComment = useViewerStore.getState().comments.find((c) => c.id === 'root-001');
+      expect(updatedComment?.content).toBe('Updated parent comment');
+      expect(updatedComment?.updatedAt).toBeDefined();
+    });
+
+    it('shows DeleteConfirmDialog when Delete is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /delete comment/i }));
+
+      // Dialog should be visible
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText(/delete comment\?/i)).toBeInTheDocument();
+    });
+
+    it('closes DeleteConfirmDialog when Cancel is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      // Open delete dialog
+      await user.click(screen.getByRole('button', { name: /delete comment/i }));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      // Cancel
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Dialog should be closed
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('shows EditCommentForm when Edit is clicked on reply', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment, mockReplies[0]],
+        authorName: 'Bob', // Same as reply author
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      // Click edit on reply (Bob's reply)
+      await user.click(screen.getByRole('button', { name: /edit reply/i }));
+
+      // EditCommentForm should show with reply content
+      expect(screen.getByRole('textbox')).toHaveValue('First reply');
+    });
+
+    it('shows comment preview in delete dialog', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [mockRootComment],
+        authorName: 'Alice',
+      });
+      render(
+        <CommentThread
+          comment={mockRootComment}
+          onCommentClick={mockOnCommentClick}
+          onResolve={mockOnResolve}
+          onReopen={mockOnReopen}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /delete comment/i }));
+
+      // Should show preview of comment being deleted
+      expect(screen.getByText(/"This is the parent comment"/)).toBeInTheDocument();
+    });
+  });
 });

@@ -301,4 +301,149 @@ describe('CommentListItem', () => {
       expect(onCommentClick).not.toHaveBeenCalled();
     });
   });
+
+  describe('edit/delete buttons (Story 3.6)', () => {
+    const mockOnEdit = vi.fn();
+    const mockOnDelete = vi.fn();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('shows Edit button when currentUserName matches comment author', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onEdit={mockOnEdit}
+          currentUserName="Alice"
+        />
+      );
+      expect(screen.getByRole('button', { name: /edit comment/i })).toBeInTheDocument();
+    });
+
+    it('shows Delete button when currentUserName matches comment author', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onDelete={mockOnDelete}
+          currentUserName="Alice"
+        />
+      );
+      expect(screen.getByRole('button', { name: /delete comment/i })).toBeInTheDocument();
+    });
+
+    it('does not show Edit button when currentUserName does not match author', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onEdit={mockOnEdit}
+          currentUserName="Bob"
+        />
+      );
+      expect(screen.queryByRole('button', { name: /edit comment/i })).not.toBeInTheDocument();
+    });
+
+    it('does not show Delete button when currentUserName does not match author', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onDelete={mockOnDelete}
+          currentUserName="Bob"
+        />
+      );
+      expect(screen.queryByRole('button', { name: /delete comment/i })).not.toBeInTheDocument();
+    });
+
+    it('does not show Edit/Delete when currentUserName is undefined', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+        />
+      );
+      expect(screen.queryByRole('button', { name: /edit comment/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /delete comment/i })).not.toBeInTheDocument();
+    });
+
+    it('calls onEdit when Edit button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onEdit={mockOnEdit}
+          currentUserName="Alice"
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /edit comment/i }));
+      expect(mockOnEdit).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onDelete when Delete button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onDelete={mockOnDelete}
+          currentUserName="Alice"
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /delete comment/i }));
+      expect(mockOnDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows "(edited)" indicator when comment has updatedAt', () => {
+      const editedComment = {
+        ...mockAnchoredComment,
+        updatedAt: '2026-01-23T14:00:00Z',
+      };
+      render(<CommentListItem comment={editedComment} onCommentClick={vi.fn()} />);
+      expect(screen.getByText('(edited)')).toBeInTheDocument();
+    });
+
+    it('does not show "(edited)" indicator when comment has no updatedAt', () => {
+      render(<CommentListItem comment={mockAnchoredComment} onCommentClick={vi.fn()} />);
+      expect(screen.queryByText('(edited)')).not.toBeInTheDocument();
+    });
+
+    it('does not trigger onCommentClick when Edit button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      const onCommentClick = vi.fn();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={onCommentClick}
+          onEdit={mockOnEdit}
+          currentUserName="Alice"
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /edit comment/i }));
+      expect(onCommentClick).not.toHaveBeenCalled();
+    });
+
+    it('shows Edit/Delete buttons for own resolved comments', () => {
+      const resolvedComment = { ...mockAnchoredComment, status: 'resolved' as const };
+      render(
+        <CommentListItem
+          comment={resolvedComment}
+          onCommentClick={vi.fn()}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          currentUserName="Alice"
+        />
+      );
+      expect(screen.getByRole('button', { name: /edit comment/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /delete comment/i })).toBeInTheDocument();
+    });
+  });
 });

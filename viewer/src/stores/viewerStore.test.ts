@@ -1556,4 +1556,206 @@ describe('viewerStore', () => {
       expect(counts).toEqual({ total: 2, open: 1, resolved: 1 });
     });
   });
+
+  // Story 3.6: Edit/Delete Comments
+  describe('editComment action (Story 3.6)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: 'c1',
+            author: 'Alice',
+            content: 'Original',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+        ],
+        isEditingComment: false,
+        editCommentError: null,
+      });
+    });
+
+    it('updates content and sets updatedAt', () => {
+      const result = useViewerStore.getState().editComment('c1', 'Updated content');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.content).toBe('Updated content');
+        expect(result.data.updatedAt).toBeDefined();
+      }
+      const comment = useViewerStore.getState().comments.find((c) => c.id === 'c1');
+      expect(comment?.content).toBe('Updated content');
+      expect(comment?.updatedAt).toBeDefined();
+    });
+
+    it('returns error if content is empty', () => {
+      const result = useViewerStore.getState().editComment('c1', '   ');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Comment content is required');
+      }
+    });
+
+    it('returns error if comment does not exist', () => {
+      const result = useViewerStore.getState().editComment('nonexistent', 'New content');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Comment not found');
+      }
+    });
+
+    it('preserves all other comment fields', () => {
+      const original = useViewerStore.getState().comments[0];
+      useViewerStore.getState().editComment('c1', 'Updated');
+      const updated = useViewerStore.getState().comments.find((c) => c.id === 'c1');
+      expect(updated?.author).toBe(original.author);
+      expect(updated?.createdAt).toBe(original.createdAt);
+      expect(updated?.status).toBe(original.status);
+    });
+
+    it('sets isEditingComment to false after success', () => {
+      useViewerStore.getState().editComment('c1', 'Updated');
+      expect(useViewerStore.getState().isEditingComment).toBe(false);
+    });
+
+    it('trims content whitespace', () => {
+      const result = useViewerStore.getState().editComment('c1', '  Trimmed  ');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.content).toBe('Trimmed');
+      }
+    });
+
+    it('sets updatedAt to ISO 8601 timestamp', () => {
+      const before = new Date().toISOString();
+      const result = useViewerStore.getState().editComment('c1', 'Updated');
+      const after = new Date().toISOString();
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.updatedAt! >= before).toBe(true);
+        expect(result.data.updatedAt! <= after).toBe(true);
+      }
+    });
+
+    it('can edit a reply', () => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: 'root1',
+            author: 'Alice',
+            content: 'Root',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: 'reply1',
+            author: 'Bob',
+            content: 'Reply original',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'open',
+            parentId: 'root1',
+          },
+        ],
+      });
+      const result = useViewerStore.getState().editComment('reply1', 'Reply updated');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.content).toBe('Reply updated');
+        expect(result.data.parentId).toBe('root1');
+      }
+    });
+  });
+
+  describe('deleteComment action (Story 3.6)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: 'root1',
+            author: 'Alice',
+            content: 'Root',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: 'reply1',
+            author: 'Bob',
+            content: 'Reply 1',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'open',
+            parentId: 'root1',
+          },
+          {
+            id: 'reply2',
+            author: 'Charlie',
+            content: 'Reply 2',
+            createdAt: '2026-01-03T00:00:00Z',
+            status: 'open',
+            parentId: 'root1',
+          },
+          {
+            id: 'root2',
+            author: 'David',
+            content: 'Another root',
+            createdAt: '2026-01-04T00:00:00Z',
+            status: 'open',
+          },
+        ],
+        isDeletingComment: false,
+        deleteCommentError: null,
+      });
+    });
+
+    it('removes comment from array', () => {
+      const before = useViewerStore.getState().comments.length;
+      const result = useViewerStore.getState().deleteComment('root2');
+      expect(result.ok).toBe(true);
+      expect(useViewerStore.getState().comments.length).toBe(before - 1);
+      expect(useViewerStore.getState().comments.find((c) => c.id === 'root2')).toBeUndefined();
+    });
+
+    it('returns error if comment does not exist', () => {
+      const result = useViewerStore.getState().deleteComment('nonexistent');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Comment not found');
+      }
+    });
+
+    it('cascade deletes all replies when deleting root comment', () => {
+      const result = useViewerStore.getState().deleteComment('root1');
+      expect(result.ok).toBe(true);
+      const remaining = useViewerStore.getState().comments;
+      expect(remaining).toHaveLength(1); // Only root2 should remain
+      expect(remaining[0].id).toBe('root2');
+    });
+
+    it('only removes the reply when deleting a reply (no cascade)', () => {
+      const result = useViewerStore.getState().deleteComment('reply1');
+      expect(result.ok).toBe(true);
+      const remaining = useViewerStore.getState().comments;
+      expect(remaining).toHaveLength(3); // root1, reply2, root2
+      expect(remaining.find((c) => c.id === 'reply1')).toBeUndefined();
+      expect(remaining.find((c) => c.id === 'reply2')).toBeDefined();
+    });
+
+    it('sets isDeletingComment to false after success', () => {
+      useViewerStore.getState().deleteComment('root2');
+      expect(useViewerStore.getState().isDeletingComment).toBe(false);
+    });
+
+    it('preserves other comments when deleting', () => {
+      useViewerStore.getState().deleteComment('root2');
+      const remaining = useViewerStore.getState().comments;
+      expect(remaining.find((c) => c.id === 'root1')).toBeDefined();
+      expect(remaining.find((c) => c.id === 'reply1')).toBeDefined();
+    });
+
+    it('returns ok:true with undefined data on success', () => {
+      const result = useViewerStore.getState().deleteComment('root2');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toBeUndefined();
+      }
+    });
+  });
 });

@@ -96,4 +96,80 @@ describe('ReplyListItem', () => {
     render(<ReplyListItem reply={resolvedReply} onResolve={vi.fn()} onReopen={vi.fn()} />);
     expect(screen.getByText('Strikethrough test')).toHaveClass('line-through');
   });
+
+  describe('edit/delete buttons (Story 3.6)', () => {
+    const mockOnEdit = vi.fn();
+    const mockOnDelete = vi.fn();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('shows Edit button when currentUserName matches reply author', () => {
+      render(<ReplyListItem reply={mockReply} onEdit={mockOnEdit} currentUserName="Charlie" />);
+      expect(screen.getByRole('button', { name: /edit reply/i })).toBeInTheDocument();
+    });
+
+    it('shows Delete button when currentUserName matches reply author', () => {
+      render(<ReplyListItem reply={mockReply} onDelete={mockOnDelete} currentUserName="Charlie" />);
+      expect(screen.getByRole('button', { name: /delete reply/i })).toBeInTheDocument();
+    });
+
+    it('does not show Edit button when currentUserName does not match author', () => {
+      render(<ReplyListItem reply={mockReply} onEdit={mockOnEdit} currentUserName="Alice" />);
+      expect(screen.queryByRole('button', { name: /edit reply/i })).not.toBeInTheDocument();
+    });
+
+    it('does not show Delete button when currentUserName does not match author', () => {
+      render(<ReplyListItem reply={mockReply} onDelete={mockOnDelete} currentUserName="Alice" />);
+      expect(screen.queryByRole('button', { name: /delete reply/i })).not.toBeInTheDocument();
+    });
+
+    it('does not show Edit/Delete when currentUserName is undefined', () => {
+      render(<ReplyListItem reply={mockReply} onEdit={mockOnEdit} onDelete={mockOnDelete} />);
+      expect(screen.queryByRole('button', { name: /edit reply/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /delete reply/i })).not.toBeInTheDocument();
+    });
+
+    it('calls onEdit when Edit button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(<ReplyListItem reply={mockReply} onEdit={mockOnEdit} currentUserName="Charlie" />);
+      await user.click(screen.getByRole('button', { name: /edit reply/i }));
+      expect(mockOnEdit).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onDelete when Delete button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(<ReplyListItem reply={mockReply} onDelete={mockOnDelete} currentUserName="Charlie" />);
+      await user.click(screen.getByRole('button', { name: /delete reply/i }));
+      expect(mockOnDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows "(edited)" indicator when reply has updatedAt', () => {
+      const editedReply = { ...mockReply, updatedAt: '2026-01-23T14:00:00Z' };
+      render(<ReplyListItem reply={editedReply} />);
+      expect(screen.getByText('(edited)')).toBeInTheDocument();
+    });
+
+    it('does not show "(edited)" indicator when reply has no updatedAt', () => {
+      render(<ReplyListItem reply={mockReply} />);
+      expect(screen.queryByText('(edited)')).not.toBeInTheDocument();
+    });
+
+    it('shows Edit/Delete buttons for own resolved replies', () => {
+      const resolvedReply = { ...mockReply, status: 'resolved' as const };
+      render(
+        <ReplyListItem
+          reply={resolvedReply}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          currentUserName="Charlie"
+        />
+      );
+      expect(screen.getByRole('button', { name: /edit reply/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /delete reply/i })).toBeInTheDocument();
+    });
+  });
 });

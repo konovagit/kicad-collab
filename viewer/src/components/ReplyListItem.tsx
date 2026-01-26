@@ -8,6 +8,9 @@ interface ReplyListItemProps {
   reply: Comment;
   onResolve?: (id: string) => void;
   onReopen?: (id: string) => void;
+  onEdit?: () => void; // Story 3.6: Edit own reply
+  onDelete?: () => void; // Story 3.6: Delete own reply
+  currentUserName?: string; // Story 3.6: For author check
 }
 
 /**
@@ -23,8 +26,13 @@ export const ReplyListItem = memo(function ReplyListItem({
   reply,
   onResolve,
   onReopen,
+  onEdit,
+  onDelete,
+  currentUserName,
 }: ReplyListItemProps) {
   const isResolved = reply.status === 'resolved';
+  const isOwnReply = currentUserName && currentUserName === reply.author;
+  const hasBeenEdited = Boolean(reply.updatedAt);
 
   const handleResolve = useCallback(
     (e: React.MouseEvent) => {
@@ -42,6 +50,22 @@ export const ReplyListItem = memo(function ReplyListItem({
     [reply.id, onReopen]
   );
 
+  const handleEdit = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onEdit?.();
+    },
+    [onEdit]
+  );
+
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDelete?.();
+    },
+    [onDelete]
+  );
+
   return (
     <div
       className={`p-2 rounded border border-gray-100 bg-gray-50 ${isResolved ? 'opacity-60' : ''}`}
@@ -52,7 +76,10 @@ export const ReplyListItem = memo(function ReplyListItem({
           <span className="font-medium text-xs">{reply.author}</span>
           <CommentStatusBadge status={reply.status} />
         </div>
-        <span className="text-xs text-gray-400">{formatRelativeTime(reply.createdAt)}</span>
+        <span className="text-xs text-gray-400">
+          {formatRelativeTime(reply.createdAt)}
+          {hasBeenEdited && <span className="ml-1">(edited)</span>}
+        </span>
       </div>
 
       {/* Reply content with strikethrough if resolved */}
@@ -75,6 +102,25 @@ export const ReplyListItem = memo(function ReplyListItem({
             aria-label={`Resolve reply by ${reply.author}`}
           >
             Resolve
+          </button>
+        )}
+        {/* Edit/Delete always available for own replies */}
+        {isOwnReply && onEdit && (
+          <button
+            onClick={handleEdit}
+            className="text-xs text-gray-600 hover:text-gray-800"
+            aria-label={`Edit reply by ${reply.author}`}
+          >
+            Edit
+          </button>
+        )}
+        {isOwnReply && onDelete && (
+          <button
+            onClick={handleDelete}
+            className="text-xs text-red-600 hover:text-red-800"
+            aria-label={`Delete reply by ${reply.author}`}
+          >
+            Delete
           </button>
         )}
       </div>

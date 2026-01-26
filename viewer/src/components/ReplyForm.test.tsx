@@ -62,6 +62,15 @@ describe('ReplyForm', () => {
     expect(mockOnSubmit).toHaveBeenCalledWith('My reply');
   });
 
+  it('submits on Cmd+Enter (macOS)', async () => {
+    const user = userEvent.setup();
+    render(<ReplyForm parentId="1" onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'My reply');
+    await user.type(textarea, '{Meta>}{Enter}{/Meta}');
+    expect(mockOnSubmit).toHaveBeenCalledWith('My reply');
+  });
+
   it('displays error message when error prop provided', () => {
     render(
       <ReplyForm
