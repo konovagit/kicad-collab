@@ -1,20 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 import { useViewerStore } from '@/stores/viewerStore';
 
-interface AddCommentFormProps {
-  componentRef: string;
+interface GeneralCommentFormProps {
   onSubmit: (content: string) => void;
   onCancel: () => void;
   isSubmitting: boolean;
+  error?: string | null;
 }
 
-export function AddCommentForm({
-  componentRef,
+/**
+ * Form for adding general comments that are not anchored to any component.
+ * Similar to AddCommentForm but without componentRef.
+ *
+ * Story 3.3: Add General Comment
+ */
+export function GeneralCommentForm({
   onSubmit,
   onCancel,
   isSubmitting,
-}: AddCommentFormProps) {
+  error,
+}: GeneralCommentFormProps) {
   const authorName = useViewerStore((s) => s.authorName);
   const setAuthorName = useViewerStore((s) => s.setAuthorName);
   const [content, setContent] = useState('');
@@ -26,7 +32,7 @@ export function AddCommentForm({
     textareaRef.current?.focus();
   }, []);
 
-  // Handle Escape key
+  // Handle Escape key to cancel
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -37,20 +43,12 @@ export function AddCommentForm({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onCancel]);
 
-  const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
-  }, []);
-
-  const handleAuthorChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalAuthor(e.target.value);
-  }, []);
-
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!content.trim()) return;
 
-      // Save author name if this is first time
+      // Save author name if first time
       if (!authorName && localAuthor.trim()) {
         setAuthorName(localAuthor.trim());
       }
@@ -60,63 +58,84 @@ export function AddCommentForm({
     [content, authorName, localAuthor, setAuthorName, onSubmit]
   );
 
-  const handleCancel = useCallback(() => {
-    onCancel();
-  }, [onCancel]);
-
   const canSubmit = content.trim().length > 0 && (authorName || localAuthor.trim());
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-4 w-80">
-      {/* Header */}
+      {/* Header - clearly indicates GENERAL comment */}
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-gray-700">
-          Commenting on <span className="text-blue-600">{componentRef}</span>
+        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <svg
+            className="w-4 h-4 text-gray-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+            />
+          </svg>
+          General Comment
         </h3>
+        <p className="text-xs text-gray-500 mt-1">This comment is not attached to any component</p>
       </div>
 
       {/* Author name input (only if not set) */}
       {!authorName && (
         <div className="mb-4">
-          <label htmlFor="author-name" className="block text-xs text-gray-500 mb-1">
+          <label htmlFor="general-author-name" className="block text-xs text-gray-500 mb-1">
             Your name
           </label>
           <input
-            id="author-name"
+            id="general-author-name"
             type="text"
             value={localAuthor}
-            onChange={handleAuthorChange}
+            onChange={(e) => setLocalAuthor(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
             placeholder="Enter your name"
             aria-describedby="author-name-hint"
           />
-          <p id="author-name-hint" className="mt-1 text-xs text-gray-400">
+          <span id="author-name-hint" className="sr-only">
             Saved for future comments
-          </p>
+          </span>
         </div>
       )}
 
       {/* Comment textarea */}
       <div className="mb-4">
-        <label htmlFor="comment-content" className="sr-only">
-          Comment
+        <label htmlFor="general-comment-content" className="sr-only">
+          Comment content
         </label>
         <textarea
-          id="comment-content"
+          id="general-comment-content"
           ref={textareaRef}
           value={content}
-          onChange={handleContentChange}
+          onChange={(e) => setContent(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded text-sm resize-none"
           rows={4}
-          placeholder="Write your comment..."
+          placeholder="Write your general comment..."
         />
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div
+          className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
 
       {/* Buttons */}
       <div className="flex justify-end gap-2">
         <button
           type="button"
-          onClick={handleCancel}
+          onClick={onCancel}
           className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
           disabled={isSubmitting}
         >

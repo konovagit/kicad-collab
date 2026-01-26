@@ -77,6 +77,9 @@ interface ViewerState {
   // Comment filter state (Story 3.4)
   commentFilter: 'all' | 'open' | 'resolved';
   setCommentFilter: (filter: 'all' | 'open' | 'resolved') => void;
+
+  // Add reply action (Story 3.5)
+  addReply: (parentId: string, content: string) => Promise<Result<Comment, Error>>;
 }
 
 export const useViewerStore = create<ViewerState>((set, get) => ({
@@ -353,24 +356,87 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   setCommentFilter: (filter: 'all' | 'open' | 'resolved') => {
     set({ commentFilter: filter });
   },
+
+  // Add reply action (Story 3.5)
+  addReply: async (parentId: string, content: string): Promise<Result<Comment, Error>> => {
+    const { authorName, comments } = get();
+
+    if (!authorName) {
+      return { ok: false, error: new Error('Author name is required') };
+    }
+
+    if (!content.trim()) {
+      return { ok: false, error: new Error('Reply content is required') };
+    }
+
+    // Verify parent exists and is a root comment (not a reply itself)
+    const parent = comments.find((c) => c.id === parentId);
+    if (!parent) {
+      return { ok: false, error: new Error('Parent comment not found') };
+    }
+    if (parent.parentId) {
+      return { ok: false, error: new Error('Can only reply to root comments') };
+    }
+
+    set({ isAddingComment: true, addCommentError: null });
+
+    try {
+      const newReply: Comment = {
+        id: crypto.randomUUID(),
+        author: authorName,
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+        status: 'open',
+        parentId,
+      };
+
+      const updatedComments = [...comments, newReply];
+      set({ comments: updatedComments, isAddingComment: false });
+
+      return { ok: true, data: newReply };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add reply';
+      set({ isAddingComment: false, addCommentError: errorMessage });
+      return { ok: false, error: error instanceof Error ? error : new Error(errorMessage) };
+    }
+  },
 }));
 
 // Computed selectors (Story 3.4)
+// UPDATED for Story 3.5: Only filter root comments, replies follow their parent
 export function selectFilteredComments(state: ViewerState): Comment[] {
   const { comments, commentFilter } = state;
-  if (commentFilter === 'all') return comments;
-  return comments.filter((c) => c.status === commentFilter);
+  const rootComments = comments.filter((c) => !c.parentId);
+  if (commentFilter === 'all') return rootComments;
+  return rootComments.filter((c) => c.status === commentFilter);
 }
 
+// UPDATED for Story 3.5: Only count root comments
 export function selectCommentCounts(state: ViewerState): {
   total: number;
   open: number;
   resolved: number;
 } {
   const { comments } = state;
+  const rootComments = comments.filter((c) => !c.parentId);
   return {
-    total: comments.length,
-    open: comments.filter((c) => c.status === 'open').length,
-    resolved: comments.filter((c) => c.status === 'resolved').length,
+    total: rootComments.length,
+    open: rootComments.filter((c) => c.status === 'open').length,
+    resolved: rootComments.filter((c) => c.status === 'resolved').length,
   };
+}
+
+// Story 3.5: Thread helper selectors
+export function selectRootComments(state: ViewerState): Comment[] {
+  return state.comments.filter((c) => !c.parentId);
+}
+
+export function selectRepliesForComment(state: ViewerState, parentId: string): Comment[] {
+  return state.comments.filter((c) => c.parentId === parentId);
+}
+
+export function selectRepliesForCommentSorted(state: ViewerState, parentId: string): Comment[] {
+  return state.comments
+    .filter((c) => c.parentId === parentId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }

@@ -235,4 +235,38 @@ describe('AddCommentForm', () => {
 
     expect(screen.getByRole('button', { name: /add comment/i })).not.toBeDisabled();
   });
+
+  describe('accessibility', () => {
+    it('has aria-describedby hint for author name input', () => {
+      useViewerStore.setState({ authorName: null });
+      render(
+        <AddCommentForm
+          componentRef="C12"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />
+      );
+
+      const authorInput = screen.getByPlaceholderText(/enter your name/i);
+      expect(authorInput).toHaveAttribute('aria-describedby', 'author-name-hint');
+      expect(screen.getByText(/saved for future comments/i)).toBeInTheDocument();
+    });
+
+    it('has accessible label for comment textarea', () => {
+      render(
+        <AddCommentForm
+          componentRef="C12"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />
+      );
+
+      const textarea = screen.getByPlaceholderText(/write your comment/i);
+      expect(textarea).toHaveAttribute('id', 'comment-content');
+      // Screen reader only label exists
+      expect(screen.getByText('Comment')).toHaveClass('sr-only');
+    });
+  });
 });

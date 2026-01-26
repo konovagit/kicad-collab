@@ -9,6 +9,7 @@ interface CommentListItemProps {
   onCommentClick: (comment: Comment) => void;
   onResolve?: (id: string) => void;
   onReopen?: (id: string) => void;
+  onReply?: () => void; // Story 3.5: Threading support
 }
 
 /**
@@ -27,6 +28,7 @@ export const CommentListItem = memo(function CommentListItem({
   onCommentClick,
   onResolve,
   onReopen,
+  onReply,
 }: CommentListItemProps) {
   const isAnchored = Boolean(comment.componentRef);
   const isResolved = comment.status === 'resolved';
@@ -51,6 +53,14 @@ export const CommentListItem = memo(function CommentListItem({
       onReopen?.(comment.id);
     },
     [comment.id, onReopen]
+  );
+
+  const handleReply = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onReply?.();
+    },
+    [onReply]
   );
 
   return (
@@ -90,13 +100,24 @@ export const CommentListItem = memo(function CommentListItem({
             Reopen
           </button>
         ) : (
-          <button
-            onClick={handleResolve}
-            className="text-xs text-green-600 hover:text-green-800"
-            aria-label={`Resolve comment by ${comment.author}`}
-          >
-            Resolve
-          </button>
+          <>
+            <button
+              onClick={handleResolve}
+              className="text-xs text-green-600 hover:text-green-800"
+              aria-label={`Resolve comment by ${comment.author}`}
+            >
+              Resolve
+            </button>
+            {onReply && (
+              <button
+                onClick={handleReply}
+                className="text-xs text-gray-600 hover:text-gray-800"
+                aria-label={`Reply to comment by ${comment.author}`}
+              >
+                Reply
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -339,4 +339,138 @@ describe('CommentPanel', () => {
       expect(screen.getByRole('button', { name: /reopen/i })).toBeInTheDocument();
     });
   });
+
+  describe('Comment threading (Story 3.5)', () => {
+    const commentsWithReplies: Comment[] = [
+      {
+        id: 'root-1',
+        author: 'Alice',
+        content: 'Root comment 1',
+        createdAt: '2026-01-23T09:00:00Z',
+        status: 'open',
+        componentRef: 'C1',
+      },
+      {
+        id: 'reply-1',
+        author: 'Bob',
+        content: 'Reply to root 1',
+        createdAt: '2026-01-23T10:00:00Z',
+        status: 'open',
+        parentId: 'root-1',
+      },
+      {
+        id: 'root-2',
+        author: 'Carol',
+        content: 'Root comment 2',
+        createdAt: '2026-01-23T11:00:00Z',
+        status: 'open',
+      },
+    ];
+
+    it('displays Reply button on root comments', () => {
+      useViewerStore.setState({
+        comments: commentsWithReplies,
+        authorName: 'TestUser',
+        commentFilter: 'all',
+      });
+      render(<CommentPanel />);
+      // Should have 2 Reply buttons (for 2 root comments)
+      // Buttons have aria-label like "Reply to comment by Alice"
+      const replyButtons = screen.getAllByRole('button', { name: /reply to comment/i });
+      expect(replyButtons).toHaveLength(2);
+    });
+
+    it('displays replies nested under their parent comment', () => {
+      useViewerStore.setState({ comments: commentsWithReplies, authorName: 'TestUser' });
+      render(<CommentPanel />);
+      expect(screen.getByText('Root comment 1')).toBeInTheDocument();
+      expect(screen.getByText('Reply to root 1')).toBeInTheDocument();
+    });
+
+    it('counts only root comments in header', () => {
+      useViewerStore.setState({ comments: commentsWithReplies, authorName: 'TestUser' });
+      render(<CommentPanel />);
+      // Should count 2 root comments, not the reply
+      expect(screen.getByText(/2 open/i)).toBeInTheDocument();
+    });
+
+    it('filters show only root comments matching filter', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      const mixedWithReplies: Comment[] = [
+        {
+          id: 'root-open',
+          author: 'Alice',
+          content: 'Open root',
+          createdAt: '2026-01-23T09:00:00Z',
+          status: 'open',
+        },
+        {
+          id: 'root-resolved',
+          author: 'Bob',
+          content: 'Resolved root',
+          createdAt: '2026-01-23T10:00:00Z',
+          status: 'resolved',
+        },
+        {
+          id: 'reply-to-open',
+          author: 'Carol',
+          content: 'Reply to open',
+          createdAt: '2026-01-23T11:00:00Z',
+          status: 'open',
+          parentId: 'root-open',
+        },
+      ];
+      useViewerStore.setState({ comments: mixedWithReplies, authorName: 'TestUser' });
+      render(<CommentPanel />);
+
+      // Filter to resolved
+      await user.click(screen.getByRole('button', { name: /all/i }));
+      await user.click(screen.getByRole('option', { name: /resolved/i }));
+
+      // Should show only resolved root comment
+      expect(screen.getByText('Resolved root')).toBeInTheDocument();
+      expect(screen.queryByText('Open root')).not.toBeInTheDocument();
+      expect(screen.queryByText('Reply to open')).not.toBeInTheDocument();
+    });
+
+    it('opens reply form when Reply button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({ comments: commentsWithReplies, authorName: 'TestUser' });
+      render(<CommentPanel />);
+
+      // Click first Reply button
+      const replyButtons = screen.getAllByRole('button', { name: /reply/i });
+      await user.click(replyButtons[0]);
+
+      // Reply form should appear
+      expect(screen.getByRole('textbox', { name: /reply content/i })).toBeInTheDocument();
+    });
+
+    it('submits reply and shows it in thread', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      useViewerStore.setState({
+        comments: [commentsWithReplies[0], commentsWithReplies[2]], // Just root comments
+        authorName: 'TestUser',
+      });
+      render(<CommentPanel />);
+
+      // Click first Reply button
+      const replyButtons = screen.getAllByRole('button', { name: /reply/i });
+      await user.click(replyButtons[0]);
+
+      // Type reply
+      await user.type(screen.getByRole('textbox'), 'New reply content');
+
+      // Submit
+      await user.click(screen.getByRole('button', { name: /^reply$/i }));
+
+      // Wait for reply to appear
+      await waitFor(() => {
+        expect(screen.getByText('New reply content')).toBeInTheDocument();
+      });
+    });
+  });
 });

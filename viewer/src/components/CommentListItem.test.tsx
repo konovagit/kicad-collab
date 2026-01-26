@@ -240,4 +240,65 @@ describe('CommentListItem', () => {
       expect(screen.getByText('Test content for strikethrough')).toHaveClass('line-through');
     });
   });
+
+  describe('reply button (Story 3.5)', () => {
+    const mockOnReply = vi.fn();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('shows Reply button when onReply prop is provided and comment is open', () => {
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onReply={mockOnReply}
+        />
+      );
+      expect(screen.getByRole('button', { name: /reply/i })).toBeInTheDocument();
+    });
+
+    it('does not show Reply button when onReply prop is not provided', () => {
+      render(<CommentListItem comment={mockAnchoredComment} onCommentClick={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /reply/i })).not.toBeInTheDocument();
+    });
+
+    it('does not show Reply button for resolved comments', () => {
+      const resolvedComment = { ...mockAnchoredComment, status: 'resolved' as const };
+      render(
+        <CommentListItem comment={resolvedComment} onCommentClick={vi.fn()} onReply={mockOnReply} />
+      );
+      expect(screen.queryByRole('button', { name: /reply/i })).not.toBeInTheDocument();
+    });
+
+    it('calls onReply when Reply button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={vi.fn()}
+          onReply={mockOnReply}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /reply/i }));
+      expect(mockOnReply).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not trigger onCommentClick when Reply button is clicked', async () => {
+      vi.useRealTimers();
+      const user = userEvent.setup();
+      const onCommentClick = vi.fn();
+      render(
+        <CommentListItem
+          comment={mockAnchoredComment}
+          onCommentClick={onCommentClick}
+          onReply={mockOnReply}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: /reply/i }));
+      expect(onCommentClick).not.toHaveBeenCalled();
+    });
+  });
 });

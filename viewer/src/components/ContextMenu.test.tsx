@@ -118,4 +118,59 @@ describe('ContextMenu', () => {
     );
     expect(screen.getByRole('menu')).toHaveClass('z-50');
   });
+
+  it('auto-focuses first menu item on mount', () => {
+    render(
+      <ContextMenu
+        position={{ x: 100, y: 200 }}
+        componentRef="C12"
+        onAddComment={mockOnAddComment}
+        onClose={mockOnClose}
+      />
+    );
+    expect(screen.getByRole('menuitem', { name: /add comment/i })).toHaveFocus();
+  });
+
+  it('keeps focus on menu item when ArrowDown pressed', async () => {
+    const user = userEvent.setup();
+    render(
+      <ContextMenu
+        position={{ x: 100, y: 200 }}
+        componentRef="C12"
+        onAddComment={mockOnAddComment}
+        onClose={mockOnClose}
+      />
+    );
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: /add comment/i })).toHaveFocus();
+  });
+
+  it('keeps focus on menu item when ArrowUp pressed', async () => {
+    const user = userEvent.setup();
+    render(
+      <ContextMenu
+        position={{ x: 100, y: 200 }}
+        componentRef="C12"
+        onAddComment={mockOnAddComment}
+        onClose={mockOnClose}
+      />
+    );
+    await user.keyboard('{ArrowUp}');
+    expect(screen.getByRole('menuitem', { name: /add comment/i })).toHaveFocus();
+  });
+
+  it('activates menu item when Enter pressed', async () => {
+    const user = userEvent.setup();
+    render(
+      <ContextMenu
+        position={{ x: 100, y: 200 }}
+        componentRef="C12"
+        onAddComment={mockOnAddComment}
+        onClose={mockOnClose}
+      />
+    );
+    await user.keyboard('{Enter}');
+    expect(mockOnAddComment).toHaveBeenCalled();
+    expect(mockOnClose).toHaveBeenCalled();
+  });
 });

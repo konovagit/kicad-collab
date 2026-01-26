@@ -4,7 +4,7 @@ import { useComments } from '@/hooks/useComments';
 import { useAddGeneralComment } from '@/hooks/useAddGeneralComment';
 import { useCommentStatus } from '@/hooks/useCommentStatus';
 import { useViewerStore } from '@/stores/viewerStore';
-import { CommentListItem } from './CommentListItem';
+import { CommentThread } from './CommentThread';
 import { CommentFilterDropdown } from './CommentFilterDropdown';
 import { GeneralCommentForm } from './GeneralCommentForm';
 
@@ -30,19 +30,25 @@ export function CommentPanel() {
   // Comment status actions via hook (Story 3.4)
   const { resolveComment, reopenComment } = useCommentStatus();
 
+  // Story 3.5: Filter only root comments (replies follow their parent)
+  const rootComments = useMemo(() => {
+    return comments.filter((c) => !c.parentId);
+  }, [comments]);
+
   // Compute filtered comments and counts with useMemo to avoid infinite loops
   const filteredComments = useMemo(() => {
-    if (commentFilter === 'all') return comments;
-    return comments.filter((c) => c.status === commentFilter);
-  }, [comments, commentFilter]);
+    if (commentFilter === 'all') return rootComments;
+    return rootComments.filter((c) => c.status === commentFilter);
+  }, [rootComments, commentFilter]);
 
+  // Story 3.5: Count only root comments
   const counts = useMemo(
     () => ({
-      total: comments.length,
-      open: comments.filter((c) => c.status === 'open').length,
-      resolved: comments.filter((c) => c.status === 'resolved').length,
+      total: rootComments.length,
+      open: rootComments.filter((c) => c.status === 'open').length,
+      resolved: rootComments.filter((c) => c.status === 'resolved').length,
     }),
-    [comments]
+    [rootComments]
   );
 
   const handleOpenGeneralCommentForm = useCallback(() => {
@@ -172,8 +178,8 @@ export function CommentPanel() {
     );
   }
 
-  // Empty state - check both total comments and filtered comments
-  if (comments.length === 0) {
+  // Empty state - check root comments (Story 3.5)
+  if (rootComments.length === 0) {
     return (
       <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-lg border-l border-gray-200 flex flex-col">
         {renderHeader()}
@@ -219,7 +225,7 @@ export function CommentPanel() {
           </div>
         ) : (
           sortedFilteredComments.map((comment) => (
-            <CommentListItem
+            <CommentThread
               key={comment.id}
               comment={comment}
               onCommentClick={handleCommentClick}

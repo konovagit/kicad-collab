@@ -8,6 +8,9 @@ import {
   useViewerStore,
   selectFilteredComments,
   selectCommentCounts,
+  selectRootComments,
+  selectRepliesForComment,
+  selectRepliesForCommentSorted,
 } from './viewerStore';
 import type { Comment, Component } from '@/types';
 import * as authorStorage from '@/utils/authorStorage';
@@ -1240,6 +1243,317 @@ describe('viewerStore', () => {
       expect(state.svg).toBe(mockSvgContent);
       expect(state.zoom).toBe(2.0);
       expect(state.selectedRef).toBe('R1');
+    });
+  });
+
+  // Story 3.5: Comment Threading (Replies)
+  describe('addReply action (Story 3.5)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        authorName: 'TestUser',
+        comments: [
+          {
+            id: 'parent-1',
+            author: 'Alice',
+            content: 'Parent comment',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+        ],
+        isAddingComment: false,
+        addCommentError: null,
+      });
+    });
+
+    it('creates reply with parentId set', async () => {
+      const result = await useViewerStore.getState().addReply('parent-1', 'My reply');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.parentId).toBe('parent-1');
+        expect(result.data.content).toBe('My reply');
+        expect(result.data.status).toBe('open');
+        expect(result.data.author).toBe('TestUser');
+      }
+    });
+
+    it('returns error if authorName not set', async () => {
+      useViewerStore.setState({ authorName: null });
+      const result = await useViewerStore.getState().addReply('parent-1', 'Reply');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Author name is required');
+      }
+    });
+
+    it('returns error if content is empty', async () => {
+      const result = await useViewerStore.getState().addReply('parent-1', '   ');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Reply content is required');
+      }
+    });
+
+    it('returns error if parent comment does not exist', async () => {
+      const result = await useViewerStore.getState().addReply('nonexistent', 'Reply');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Parent comment not found');
+      }
+    });
+
+    it('appends reply to comments array', async () => {
+      const before = useViewerStore.getState().comments.length;
+      await useViewerStore.getState().addReply('parent-1', 'Reply');
+      const after = useViewerStore.getState().comments.length;
+      expect(after).toBe(before + 1);
+    });
+
+    it('returns error when trying to reply to a reply', async () => {
+      // First add a reply
+      await useViewerStore.getState().addReply('parent-1', 'First reply');
+      const comments = useViewerStore.getState().comments;
+      const replyId = comments.find((c) => c.parentId === 'parent-1')!.id;
+
+      // Try to reply to the reply
+      const result = await useViewerStore.getState().addReply(replyId, 'Nested reply');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe('Can only reply to root comments');
+      }
+    });
+
+    it('generates valid UUID for reply id', async () => {
+      const result = await useViewerStore.getState().addReply('parent-1', 'Test');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.id).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        );
+      }
+    });
+
+    it('generates ISO 8601 timestamp for createdAt', async () => {
+      const result = await useViewerStore.getState().addReply('parent-1', 'Test');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(() => new Date(result.data.createdAt)).not.toThrow();
+        expect(result.data.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      }
+    });
+  });
+
+  describe('selectRootComments selector (Story 3.5)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'A',
+            content: 'Root 1',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: '2',
+            author: 'B',
+            content: 'Root 2',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: '3',
+            author: 'C',
+            content: 'Reply to 1',
+            createdAt: '2026-01-03T00:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+        ],
+      });
+    });
+
+    it('returns only comments without parentId', () => {
+      const roots = selectRootComments(useViewerStore.getState());
+      expect(roots).toHaveLength(2);
+      expect(roots.every((c) => !c.parentId)).toBe(true);
+    });
+
+    it('excludes replies from the result', () => {
+      const roots = selectRootComments(useViewerStore.getState());
+      expect(roots.find((c) => c.id === '3')).toBeUndefined();
+    });
+  });
+
+  describe('selectRepliesForComment selector (Story 3.5)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'A',
+            content: 'Root',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: 'r1',
+            author: 'B',
+            content: 'Reply 1',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+          {
+            id: 'r2',
+            author: 'C',
+            content: 'Reply 2',
+            createdAt: '2026-01-01T12:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+          {
+            id: 'r3',
+            author: 'D',
+            content: 'Other reply',
+            createdAt: '2026-01-03T00:00:00Z',
+            status: 'open',
+            parentId: 'other',
+          },
+        ],
+      });
+    });
+
+    it('returns only replies to specific parent', () => {
+      const replies = selectRepliesForComment(useViewerStore.getState(), '1');
+      expect(replies).toHaveLength(2);
+      expect(replies.every((c) => c.parentId === '1')).toBe(true);
+    });
+
+    it('returns empty array for parent with no replies', () => {
+      const replies = selectRepliesForComment(useViewerStore.getState(), 'no-replies');
+      expect(replies).toHaveLength(0);
+    });
+  });
+
+  describe('selectRepliesForCommentSorted selector (Story 3.5)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'A',
+            content: 'Root',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: 'r1',
+            author: 'B',
+            content: 'Reply 1',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+          {
+            id: 'r2',
+            author: 'C',
+            content: 'Reply 2',
+            createdAt: '2026-01-01T12:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+        ],
+      });
+    });
+
+    it('returns replies in chronological order (oldest first)', () => {
+      const replies = selectRepliesForCommentSorted(useViewerStore.getState(), '1');
+      // r2 was created before r1, so r2 should come first
+      expect(replies[0].id).toBe('r2');
+      expect(replies[1].id).toBe('r1');
+    });
+  });
+
+  describe('selectFilteredComments with threading (Story 3.5)', () => {
+    beforeEach(() => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'A',
+            content: 'Open root',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: '2',
+            author: 'B',
+            content: 'Resolved root',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'resolved',
+          },
+          {
+            id: 'r1',
+            author: 'C',
+            content: 'Reply to 1',
+            createdAt: '2026-01-03T00:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+        ],
+        commentFilter: 'all',
+      });
+    });
+
+    it('returns only root comments when filter is "all"', () => {
+      const filtered = selectFilteredComments(useViewerStore.getState());
+      expect(filtered).toHaveLength(2);
+      expect(filtered.every((c) => !c.parentId)).toBe(true);
+    });
+
+    it('excludes replies from filtered results', () => {
+      const filtered = selectFilteredComments(useViewerStore.getState());
+      expect(filtered.find((c) => c.id === 'r1')).toBeUndefined();
+    });
+
+    it('filters root comments by status', () => {
+      useViewerStore.getState().setCommentFilter('open');
+      const filtered = selectFilteredComments(useViewerStore.getState());
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe('1');
+    });
+  });
+
+  describe('selectCommentCounts with threading (Story 3.5)', () => {
+    it('counts only root comments', () => {
+      useViewerStore.setState({
+        comments: [
+          {
+            id: '1',
+            author: 'A',
+            content: 'Root open',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+          },
+          {
+            id: '2',
+            author: 'B',
+            content: 'Root resolved',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'resolved',
+          },
+          {
+            id: 'r1',
+            author: 'C',
+            content: 'Reply',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'open',
+            parentId: '1',
+          },
+        ],
+      });
+      const counts = selectCommentCounts(useViewerStore.getState());
+      expect(counts).toEqual({ total: 2, open: 1, resolved: 1 });
     });
   });
 });

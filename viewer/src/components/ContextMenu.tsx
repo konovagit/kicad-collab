@@ -9,6 +9,12 @@ interface ContextMenuProps {
 
 export function ContextMenu({ position, componentRef, onAddComment, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const firstItemRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-focus first menu item on mount for keyboard accessibility
+  useEffect(() => {
+    firstItemRef.current?.focus();
+  }, []);
 
   // Close on click outside
   useEffect(() => {
@@ -21,12 +27,19 @@ export function ContextMenu({ position, componentRef, onAddComment, onClose }: C
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  // Close on Escape
+  // Close on Escape and handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
       }
+      // Arrow key navigation (for future menu items)
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        // Currently only one item, but pattern established for future
+        firstItemRef.current?.focus();
+      }
+      // Enter activates focused item (handled by button default behavior)
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -46,8 +59,9 @@ export function ContextMenu({ position, componentRef, onAddComment, onClose }: C
       aria-label={`Context menu for ${componentRef}`}
     >
       <button
+        ref={firstItemRef}
         onClick={handleAddComment}
-        className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2"
+        className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2 focus:bg-gray-100 focus:outline-none"
         role="menuitem"
       >
         {/* Comment icon (inline SVG) */}
